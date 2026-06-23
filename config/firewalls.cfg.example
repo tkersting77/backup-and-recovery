@@ -1,0 +1,12 @@
+# create a backup user with following privileges:
+#  - Diagnostics: Configuration History (for Backup download)
+#  - System: Firmware (for version detection)
+
+FRW_GS40_01_IP="<ip2>"
+FRW_GS40_01_KEY="<key2>"
+FRW_GS40_01_SECRET="<secret2>"
+
+FRW_GS70_01_IP="<ip1>"
+FRW_GS70_01_KEY="<key1>"
+FRW_GS70_01_SECRET="<secret1>"
+
