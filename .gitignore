@@ -1,3 +1,4 @@
-repositories
+repositories/*
+!repositories/.gitkeep
 config/samba.cfg
 config/firewalls.cfg
