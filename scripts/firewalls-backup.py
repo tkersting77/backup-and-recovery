@@ -147,9 +147,9 @@ def download_configs() -> tuple[int, list[str]]:
     successful = []
  
     for name in FIREWALLS:
-        ip = env.get(f"FW_{name}_IP")
-        key = env.get(f"FW_{name}_KEY")
-        secret = env.get(f"FW_{name}_SECRET")
+        ip = env.get(f"FRW_{name}_IP")
+        key = env.get(f"FRW_{name}_KEY")
+        secret = env.get(f"FRW_{name}_SECRET")
  
         if not all([ip, key, secret]):
             log_and_print(f"FEHLER: Zugangsdaten fuer {name} unvollstaendig", "error")

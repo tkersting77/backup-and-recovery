@@ -1,0 +1,32 @@
+# /config/samba.cfg
+# Konfiguration fuer samba_backup.py
+# Diese Datei bleibt auf dem Server – NICHT ins Git-Repo committen!
+# samba.cfg.example dient als Vorlage und IST im Git-Repo.
+
+# Restic Repository
+RESTIC_REPO=/backup/files/restic/firma
+RESTIC_PASSWORD_FILE=/etc/restic/password.txt
+
+# Samba Server (VPN-IP und SSH-User)
+SAMBA_HOST=samba-user@10.8.0.x
+
+# Zu sichernde Pfade, kommagetrennt
+SAMBA_PATHS=/srv/samba/users,/srv/samba/groups
+
+# Restic Labels
+RESTIC_HOST_LABEL=firma-samba
+RESTIC_TAG=samba
+
+# Logging
+LOG_FILE=/var/log/samba-backup.log
+
+# Mail-Benachrichtigung
+NOTIFY_MAIL_TO=admin@firma.de
+NOTIFY_MAIL_FROM=backup@firma.de
+SMTP_HOST=localhost
+
+# Retention Policy
+KEEP_DAILY=7
+KEEP_WEEKLY=4
+KEEP_MONTHLY=12
+KEEP_YEARLY=2

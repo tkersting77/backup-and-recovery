@@ -1,44 +1,61 @@
 #!/usr/bin/env python3
 """
 Samba Backup Script
-- Sichert Samba-Freigaben (users, groups) per Restic Pull via SFTP
-- Snapshots werden mit --tag samba versehen, damit Retention getrennt
-  von den OPNsense-Snapshots laufen kann
-- Vollstaendig eigenstaendig, keine Abhaengigkeit zu anderen lokalen Dateien
+- Liest Konfiguration aus /etc/restic/samba.env (nicht im Git-Repo!)
+- Sichert Samba-Freigaben per Restic Pull via SFTP
+- Snapshots werden mit --tag samba versehen
+- Versendet Mail bei Erfolg und bei Fehler
 """
 
+import argparse
 import subprocess
 import logging
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Konfiguration
+# Konfiguration aus .env laden
 # ---------------------------------------------------------------------------
 
-RESTIC_REPO = "/backup/files/restic/firma"
-RESTIC_PASSWORD_FILE = "/etc/restic/password.txt"
+ENV_FILE = "/config/samba.cfg"
 
-SAMBA_HOST = "samba-user@10.8.0.x"          # VPN-IP des Samba-Servers anpassen
-SAMBA_PATHS = [
-    "/srv/samba/users",
-    "/srv/samba/groups",
-]
-RESTIC_HOST_LABEL = "firma-samba"            # Label im Snapshot, --host
-RESTIC_TAG = "samba"                         # Tag zur Trennung von OPNsense-Snapshots
 
-LOG_FILE = "/var/log/samba-backup.log"
+def load_env_file(path: str) -> dict:
+    """Laedt simple KEY=VALUE Zeilen aus einer .env Datei in ein dict."""
+    env = {}
+    env_path = Path(path)
+    if not env_path.exists():
+        raise FileNotFoundError(f"env-Datei nicht gefunden: {path}")
 
-NOTIFY_MAIL_TO = "admin@firma.de"
-NOTIFY_MAIL_FROM = "backup@firma.de"
-SMTP_HOST = "localhost"  # lokaler MTA (z.B. Postfix), ggf. anpassen
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        env[key.strip()] = value.strip().strip('"').strip("'")
+    return env
+
+
+env = load_env_file(ENV_FILE)
+
+RESTIC_REPO          = env["RESTIC_REPO"]
+RESTIC_PASSWORD_FILE = env["RESTIC_PASSWORD_FILE"]
+SAMBA_HOST           = env["SAMBA_HOST"]
+SAMBA_PATHS          = [p.strip() for p in env["SAMBA_PATHS"].split(",")]
+RESTIC_HOST_LABEL    = env.get("RESTIC_HOST_LABEL", "firma-samba")
+RESTIC_TAG           = env.get("RESTIC_TAG", "samba")
+LOG_FILE             = env.get("LOG_FILE", "/var/log/samba-backup.log")
+NOTIFY_MAIL_TO       = env["NOTIFY_MAIL_TO"]
+NOTIFY_MAIL_FROM     = env["NOTIFY_MAIL_FROM"]
+SMTP_HOST            = env.get("SMTP_HOST", "localhost")
 
 RETENTION = {
-    "keep-daily": "7",      # last 7 days, keep 1 per day
-    "keep-weekly": "4",     # last 4 weeks, keep 1 per week
-    "keep-monthly": "12",   # last 12 months, keep 1 per month
-    "keep-yearly": "2",     # last 2 years, keep 1 per year
+    "keep-daily":   env.get("KEEP_DAILY",   "7"),
+    "keep-weekly":  env.get("KEEP_WEEKLY",  "4"),
+    "keep-monthly": env.get("KEEP_MONTHLY", "12"),
+    "keep-yearly":  env.get("KEEP_YEARLY",  "2"),
 }
 
 # ---------------------------------------------------------------------------
@@ -86,8 +103,7 @@ def run_restic(args: list, capture: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=capture, text=True)
 
 
-def apply_retention(tag: str) -> None:
-    """Fuehrt forget --prune nur fuer Snapshots mit dem angegebenen Tag aus."""
+def apply_retention(tag: str) -> bool:
     args = ["forget", "--prune", "--tag", tag]
     for flag, value in RETENTION.items():
         args += [f"--{flag}", value]
@@ -102,13 +118,16 @@ def apply_retention(tag: str) -> None:
             "⚠️ Samba Retention Fehler",
             f"Forget/Prune (Samba) ist fehlgeschlagen.\n\n{result.stderr}",
         )
+        return False
+
+    return True
 
 
 # ---------------------------------------------------------------------------
 # Backup
 # ---------------------------------------------------------------------------
 
-def backup_samba() -> bool:
+def backup_samba(dry_run: bool = False) -> bool:
     sftp_targets = [f"sftp:{SAMBA_HOST}:{path}" for path in SAMBA_PATHS]
 
     args = [
@@ -117,6 +136,10 @@ def backup_samba() -> bool:
         "--tag", RESTIC_TAG,
         "--verbose",
     ] + sftp_targets
+
+    if dry_run:
+        args.append("--dry-run")
+        log_and_print("DRY-RUN Modus – es werden keine Daten geschrieben")
 
     result = run_restic(args)
 
@@ -127,27 +150,54 @@ def backup_samba() -> bool:
 
     if result.returncode != 0:
         log_and_print("Samba Restic Backup FEHLGESCHLAGEN", "error")
-        send_mail(
-            "⚠️ Samba Backup Fehler",
-            f"Restic backup (Samba) ist fehlgeschlagen.\n\n{result.stderr}",
-        )
+        if not dry_run:
+            send_mail(
+                "⚠️ Samba Backup Fehler",
+                f"Restic backup (Samba) ist fehlgeschlagen.\n\n{result.stderr}",
+            )
         return False
 
-    log_and_print("Samba Backup erfolgreich.")
+    log_and_print("Samba Backup erfolgreich." if not dry_run else "DRY-RUN abgeschlossen – kein Snapshot erstellt.")
     return True
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Samba Backup via Restic")
+    parser.add_argument(
+        "--dry-run", "-n",
+        action="store_true",
+        help="Testlauf – zeigt was gesichert wuerde, schreibt nichts, kein Snapshot, keine Mail"
+    )
+    args = parser.parse_args()
+
     start = datetime.now()
     log_and_print(f"=== Samba Backup Start {start:%Y-%m-%d %H:%M:%S} ===")
 
-    if backup_samba():
-        apply_retention(RESTIC_TAG)
+    backup_ok = backup_samba(dry_run=args.dry_run)
+
+    # Bei Dry-Run keine Retention und keine Mail
+    retention_ok = True
+    if backup_ok and not args.dry_run:
+        retention_ok = apply_retention(RESTIC_TAG)
 
     end = datetime.now()
+    duration = end - start
     log_and_print(
-        f"=== Samba Backup Ende {end:%Y-%m-%d %H:%M:%S} (Dauer: {end - start}) ==="
+        f"=== Samba Backup Ende {end:%Y-%m-%d %H:%M:%S} (Dauer: {duration}) ==="
     )
+
+    if backup_ok and retention_ok and not args.dry_run:
+        send_mail(
+            "✅ Samba Backup erfolgreich",
+            (
+                f"Samba Backup erfolgreich abgeschlossen.\n\n"
+                f"Start:    {start:%Y-%m-%d %H:%M:%S}\n"
+                f"Ende:     {end:%Y-%m-%d %H:%M:%S}\n"
+                f"Dauer:    {duration}\n"
+                f"Pfade:    {', '.join(SAMBA_PATHS)}\n\n"
+                f"Log: {LOG_FILE}"
+            ),
+        )
 
 
 if __name__ == "__main__":
