@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Restic WebUI – Anmelden</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3a;
+      --accent:   #4f8ef7;
+      --accent-h: #3a7aee;
+      --text:     #e2e4ed;
+      --muted:    #7a7f96;
+      --error:    #e05c5c;
+      --font:     'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin-bottom: 2rem;
+    }
+
+    .logo svg { flex-shrink: 0; }
+
+    .logo-text {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: -.02em;
+      color: var(--text);
+    }
+
+    .logo-sub {
+      font-size: .75rem;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    label {
+      display: block;
+      font-size: .8rem;
+      color: var(--muted);
+      margin-bottom: .4rem;
+    }
+
+    input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .65rem .8rem;
+      color: var(--text);
+      font-size: .9rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .15s;
+      margin-bottom: 1.1rem;
+    }
+
+    input:focus { border-color: var(--accent); }
+
+    button {
+      width: 100%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: .7rem;
+      font-size: .9rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .15s;
+      margin-top: .3rem;
+    }
+
+    button:hover { background: var(--accent-h); }
+
+    .error {
+      background: rgba(224, 92, 92, .12);
+      border: 1px solid rgba(224, 92, 92, .3);
+      border-radius: 6px;
+      color: var(--error);
+      font-size: .82rem;
+      padding: .6rem .8rem;
+      margin-bottom: 1.2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="7" fill="#4f8ef7" fill-opacity=".15"/>
+        <path d="M8 20V10l6-3 6 3v10l-6 3-6-3z" stroke="#4f8ef7" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M14 7v13M8 10l6 3 6-3" stroke="#4f8ef7" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <div class="logo-text">Restic WebUI</div>
+        <div class="logo-sub">Backup-Verwaltung</div>
+      </div>
+    </div>
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login">
+      <label for="username">Benutzername</label>
+      <input id="username" name="username" type="text" autocomplete="username" autofocus required>
+
+      <label for="password">Passwort</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+      <button type="submit">Anmelden</button>
+    </form>
+  </div>
+</body>
+</html>

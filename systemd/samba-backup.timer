@@ -1,0 +1,10 @@
+[Unit]
+Description=Taeglicher Samba Backup Timer
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

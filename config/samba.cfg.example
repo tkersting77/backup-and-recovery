@@ -1,24 +1,33 @@
-# /config/samba.cfg
-# Konfiguration fuer samba_backup.py
+# /config/opnsense.cfg
+# Konfiguration fuer opnsense_backup.py
 # Diese Datei bleibt auf dem Server – NICHT ins Git-Repo committen!
-# samba.cfg.example dient als Vorlage und IST im Git-Repo.
+# opnsense.cfg.example dient als Vorlage und IST im Git-Repo.
 
 # Restic Repository
 RESTIC_REPO=/backup/files/restic/firma
 RESTIC_PASSWORD_FILE=/etc/restic/password.txt
 
-# Samba Server (VPN-IP und SSH-User)
-SAMBA_HOST=samba-user@10.8.0.x
+# Firewalls: Name -> Zugangsdaten
+# Format: FW_<NAME>_IP, FW_<NAME>_KEY, FW_<NAME>_SECRET
+# Namen muessen mit der FIREWALLS-Liste in opnsense_backup.py uebereinstimmen
+FW_01_IP=10.0.1.1
+FW_01_KEY=api-key-hier
+FW_01_SECRET=api-secret-hier
 
-# Zu sichernde Pfade, kommagetrennt
-SAMBA_PATHS=/srv/samba/users,/srv/samba/groups
+FW_02_IP=10.0.2.1
+FW_02_KEY=api-key-hier
+FW_02_SECRET=api-secret-hier
+
+FW_03_IP=10.0.3.1
+FW_03_KEY=api-key-hier
+FW_03_SECRET=api-secret-hier
 
 # Restic Labels
-RESTIC_HOST_LABEL=firma-samba
-RESTIC_TAG=samba
+RESTIC_HOST_LABEL=firma-opnsense
+RESTIC_TAG=opnsense
 
 # Logging
-LOG_FILE=/var/log/samba-backup.log
+LOG_FILE=/var/log/opnsense-backup.log
 
 # Mail-Benachrichtigung
 NOTIFY_MAIL_TO=admin@firma.de

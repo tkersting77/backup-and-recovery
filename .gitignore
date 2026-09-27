@@ -1,4 +1,25 @@
+# Repositories nicht im GIT ablegen
 repositories/*
 !repositories/.gitkeep
-config/samba.cfg
-config/firewalls.cfg
+
+# Konfigurationsdateien mit echten Zugangsdaten – niemals ins Repo!
+*.cfg
+*.env
+
+# Aber Beispieldateien sind erlaubt
+!*.cfg.example
+!*.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Logs
+*.log
+
+# Temporaere Dateien
+*.tmp
+.DS_Store

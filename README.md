@@ -1,173 +1,208 @@
-# Restic Backup – Firma Samba & OPNsense
+# Firma Backup – Restic + OPNsense + WebUI
 
-Kurzreferenz der wichtigsten Restic-Befehle für das Backup-Setup.
+Backup-Lösung für den Firma-Samba-Server und fünf OPNsense-Firewall-Instanzen.
+Betrieben auf einem Debian-LXC-Container auf Proxmox, verbunden per OpenVPN.
 
-## Konfiguration
+---
+
+## Projektstruktur
 
 ```
-Repository:      /backup/files/restic/firma
-Passwort-Datei:  /etc/restic/password.txt
-Tags:             samba | opnsense
+firma-backup/
+├── scripts/
+│   ├── samba_backup.py        Samba-Freigaben per Restic Pull via SFTP
+│   └── opnsense_backup.py     OPNsense-Configs per API + Restic
+├── webui/
+│   ├── main.py                FastAPI Backend
+│   ├── requirements.txt
+│   └── templates/
+│       ├── login.html
+│       └── index.html
+├── config/
+│   ├── samba.cfg.example      Vorlage – auf dem Server als samba.cfg ablegen
+│   ├── opnsense.cfg.example   Vorlage – auf dem Server als opnsense.cfg ablegen
+│   └── webui.cfg.example      Vorlage – auf dem Server als webui.cfg ablegen
+├── systemd/                   Systemd Service- und Timer-Dateien
+├── README.md
+└── .gitignore
 ```
 
-Alle Befehle unten gehen davon aus, dass folgende Variablen gesetzt sind (optional, spart Tipparbeit):
+---
+
+## Installation
+
+### 1. Repo klonen
+
+```bash
+git clone <repo-url> /opt/firma-backup
+cd /opt/firma-backup
+```
+
+### 2. Restic installieren und aktualisieren
+
+```bash
+apt update && apt install -y restic
+restic self-update
+```
+
+### 3. Restic Repository initialisieren
+
+```bash
+mkdir -p /backup/files/restic/firma
+restic init --repo /backup/files/restic/firma
+mkdir -p /etc/restic
+echo "dein-passwort" > /etc/restic/password.txt
+chmod 600 /etc/restic/password.txt
+```
+
+### 4. Konfigurationsdateien anlegen
+
+```bash
+cp config/samba.cfg.example config/samba.cfg
+cp config/opnsense.cfg.example config/opnsense.cfg
+cp config/webui.cfg.example config/webui.cfg
+# Werte anpassen:
+nano config/samba.cfg
+nano config/opnsense.cfg
+nano config/webui.cfg
+```
+
+### 5. Python-Abhängigkeiten installieren
+
+```bash
+# Fuer Backup-Skripte
+apt install -y python3-requests
+
+# Fuer WebUI
+pip install -r webui/requirements.txt --break-system-packages
+```
+
+### 6. Systemd Timer aktivieren
+
+```bash
+cp systemd/*.service systemd/*.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now samba-backup.timer
+systemctl enable --now opnsense-backup.timer
+```
+
+### 7. WebUI starten (optional)
+
+```bash
+cp systemd/restic-webui.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now restic-webui
+# Erreichbar unter http://<server-ip>:8080
+```
+
+---
+
+## Manuell ausführen
+
+```bash
+# Samba-Backup
+python3 /opt/firma-backup/scripts/samba_backup.py
+
+# Samba-Backup Dry-Run (kein Snapshot, keine Mail)
+python3 /opt/firma-backup/scripts/samba_backup.py --dry-run
+
+# OPNsense-Backup
+python3 /opt/firma-backup/scripts/opnsense_backup.py
+```
+
+---
+
+## Wichtige Restic-Befehle
+
+### Snapshots anzeigen
 
 ```bash
 export RESTIC_REPOSITORY=/backup/files/restic/firma
 export RESTIC_PASSWORD_FILE=/etc/restic/password.txt
-```
 
-Ohne diese Variablen muss bei jedem Befehl `-r <repo> --password-file <datei>` ergänzt werden.
-
----
-
-## Snapshots anzeigen
-
-```bash
-# Alle Snapshots
 restic snapshots
-
-# Nur Samba-Snapshots
 restic snapshots --tag samba
-
-# Nur OPNsense-Snapshots
 restic snapshots --tag opnsense
-
-# Nur die letzten 5 Snapshots
-restic snapshots --latest 5
 ```
 
----
-
-## In einem Snapshot suchen
+### Dateien suchen
 
 ```bash
-# Datei/Ordner über alle Snapshots suchen
 restic find "rechnung*.pdf"
-
-# Suche auf einen Tag einschränken
 restic find --tag samba "*.xlsx"
-
-# Nur in einem bestimmten Snapshot suchen
-restic find --snapshot <snapshot-id> "*.docx"
-
-# Nach Pfad eingrenzen
+restic find --snapshot <id> "*.docx"
 restic find --path "/srv/samba/groups/buchhaltung" "*.pdf"
-
-# Mit vollem Pfad + Snapshot-ID anzeigen (für direkten Restore)
-restic find --long "rechnung*.pdf"
 ```
 
----
-
-## Inhalt eines Snapshots durchsehen
+### Inhalt eines Snapshots anzeigen
 
 ```bash
-# Wurzelverzeichnis eines Snapshots auflisten
 restic ls <snapshot-id>
-
-# Rekursiv mit vollständigen Pfaden
-restic ls <snapshot-id> -l
-
-# Bestimmten Unterordner auflisten
 restic ls <snapshot-id> /srv/samba/users/max
 ```
 
----
-
-## Wiederherstellen (Restore)
-
-**Immer zuerst in ein separates Verzeichnis restoren, nie direkt auf Produktivpfade!**
+### Wiederherstellen
 
 ```bash
-# Letzten Snapshot komplett wiederherstellen
-restic restore latest --target /tmp/restore
-
-# Bestimmten Snapshot wiederherstellen
-restic restore <snapshot-id> --target /tmp/restore
-
-# Nur einen Ordner/Datei aus einem Snapshot wiederherstellen
-restic restore <snapshot-id> --target /tmp/restore \
-  --include "/srv/samba/groups/buchhaltung/rechnung-2026.pdf"
-
-# Nur Samba-Snapshots berücksichtigen (z.B. bei "latest")
+# Immer erst in temporaeres Verzeichnis!
 restic restore latest --tag samba --target /tmp/restore
+
+# Einzelne Datei
+restic restore <id> --target /tmp/restore \
+  --include "/srv/samba/groups/buchhaltung/rechnung.pdf"
+
+# Danach auf Samba-Server uebertragen
+rsync -av /tmp/restore/srv/samba/ samba-user@10.8.0.x:/srv/samba/
 ```
 
-Nach dem Restore: Inhalt prüfen (`ls -la /tmp/restore/...`), erst danach manuell an den
-finalen Zielort kopieren (z.B. per `cp` oder `rsync` auf den Samba-Server).
-
----
-
-## Retention / Aufräumen (Forget + Prune)
+### Retention manuell (Dry-Run)
 
 ```bash
-# Trockenlauf – zeigt was gelöscht würde, ohne etwas zu löschen
 restic forget --tag samba \
   --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --keep-yearly 2 \
   --dry-run
-
-# Tatsächlich anwenden + nicht mehr referenzierte Daten löschen
-restic forget --tag samba \
-  --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --keep-yearly 2 \
-  --prune
 ```
+
+### Repository prüfen
+
+```bash
+restic check
+restic stats
+```
+
+---
+
+## Retention Policy
 
 | Policy | Bedeutung |
 |---|---|
-| `--keep-daily 7` | letzte 7 Tage, je 1 Snapshot/Tag |
-| `--keep-weekly 4` | letzte 4 Wochen, je 1 Snapshot/Woche |
-| `--keep-monthly 12` | letzte 12 Monate, je 1 Snapshot/Monat |
-| `--keep-yearly 2` | letzte 2 Jahre, je 1 Snapshot/Jahr |
+| `keep-daily 7` | Letzte 7 Tage, je 1 Snapshot/Tag |
+| `keep-weekly 4` | Letzte 4 Wochen, je 1 Snapshot/Woche |
+| `keep-monthly 12` | Letzte 12 Monate, je 1 Snapshot/Monat |
+| `keep-yearly 2` | Letzte 2 Jahre, je 1 Snapshot/Jahr |
 
 ---
 
-## Repository-Wartung
+## Disaster Recovery
 
-```bash
-# Integrität des Repos prüfen
-restic check
-
-# Inklusive Lesetest aller Datenblöcke (dauert länger, gründlicher)
-restic check --read-data
-
-# Speicherplatz-Statistik
-restic stats
-
-# Speicherplatz-Statistik pro Snapshot (roh, ohne Dedup-Effekt)
-restic stats --mode raw-data
-```
-
----
-
-## Manuelles Backup anstoßen (außerhalb der Skripte)
-
-```bash
-# Samba-Backup manuell auslösen
-python3 /opt/firma-backup/samba_backup.py
-
-# OPNsense-Backup manuell auslösen
-python3 /opt/firma-backup/opnsense_backup.py
-```
-
----
-
-## Disaster Recovery – Kurzablauf
-
-1. Restic auf neuem System installieren
-2. VPN-Verbindung zum Heimserver/Repo sicherstellen
-3. Passwort aus sicherem Speicherort holen (Passwort-Manager / Ausdruck)
-4. Restore in temporäres Verzeichnis:
+1. Neuen Server aufsetzen, Restic installieren
+2. VPN-Verbindung herstellen
+3. Passwort aus sicherem Speicher holen
+4. Restore durchführen:
    ```bash
-   restic restore latest --tag samba --target /tmp/restore
+   restic -r /backup/files/restic/firma \
+     --password-file /etc/restic/password.txt \
+     restore latest --tag samba --target /tmp/restore
    ```
-5. Daten per `rsync`/`scp` auf den (neuen) Samba-Server übertragen
-6. ACL-Cronjob einmal manuell ausführen
-7. Stichprobenartig Dateien/Berechtigungen prüfen
+5. Daten auf Samba-Server übertragen:
+   ```bash
+   rsync -av /tmp/restore/srv/samba/ samba-user@10.8.0.x:/srv/samba/
+   ```
+6. ACL-Cronjob auf dem Samba-Server manuell ausführen
 
 ---
 
-## Wichtige Logs
+## Logs
 
 ```
 /var/log/samba-backup.log

@@ -1,0 +1,21 @@
+# /config/webui.cfg
+# Konfiguration fuer die Restic WebUI
+# Diese Datei bleibt auf dem Server – NICHT ins Git-Repo committen!
+
+# Restic Passwort-Datei (gilt fuer alle Repos)
+RESTIC_PASSWORD_FILE=/etc/restic/password.txt
+
+# Repositories: REPO_<NAME>=<Pfad>
+# Name wird klein geschrieben in der UI angezeigt
+REPO_FIRMA=/backup/files/restic/firma
+REPO_OPNSENSE=/backup/files/restic/opnsense
+
+# Samba Active Directory
+AD_SERVER=ldap://10.8.0.x
+AD_DOMAIN=ash-gt.loc
+AD_BASE_DN=DC=ash-gt,DC=loc
+AD_GROUP=ResticAdmins
+
+# Session
+SECRET_KEY=hier-einen-langen-zufaelligen-string-eintragen
+SESSION_EXPIRE_MINUTES=60

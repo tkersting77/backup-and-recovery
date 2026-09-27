@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Restic WebUI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --surface2:  #22263a;
+      --border:    #2a2d3a;
+      --accent:    #4f8ef7;
+      --accent-h:  #3a7aee;
+      --text:      #e2e4ed;
+      --muted:     #7a7f96;
+      --success:   #4caf82;
+      --error:     #e05c5c;
+      --warn:      #e0a05c;
+      --font:      'Inter', system-ui, sans-serif;
+      --mono:      'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: 52px 1fr;
+    }
+
+    /* ── Topbar ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0 1.5rem;
+    }
+
+    .logo { display: flex; align-items: center; gap: .5rem; font-weight: 600; font-size: .95rem; }
+    .logo svg { flex-shrink: 0; }
+
+    .spacer { flex: 1; }
+
+    .user-badge {
+      font-size: .8rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    .btn-logout {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 5px;
+      padding: .3rem .7rem;
+      font-size: .78rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-logout:hover { border-color: var(--error); color: var(--error); }
+
+    /* ── Layout ── */
+    .main {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      height: calc(100vh - 52px);
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    aside {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-section {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-label {
+      font-size: .7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: .6rem;
+    }
+
+    select, input[type="text"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .55rem .7rem;
+      color: var(--text);
+      font-size: .85rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .15s;
+    }
+    select:focus, input[type="text"]:focus { border-color: var(--accent); }
+
+    .snapshot-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: .5rem;
+    }
+
+    .snapshot-item {
+      padding: .6rem .8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .82rem;
+      transition: background .1s;
+      border: 1px solid transparent;
+    }
+
+    .snapshot-item:hover { background: var(--surface2); }
+    .snapshot-item.active {
+      background: rgba(79, 142, 247, .1);
+      border-color: rgba(79, 142, 247, .25);
+    }
+
+    .snap-date { font-weight: 500; color: var(--text); }
+    .snap-id   { font-size: .73rem; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+    .snap-tag  {
+      display: inline-block;
+      font-size: .65rem;
+      background: rgba(79,142,247,.15);
+      color: var(--accent);
+      border-radius: 3px;
+      padding: 1px 5px;
+      margin-top: 3px;
+    }
+
+    /* ── Content ── */
+    .content {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Tab Bar */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 0 1.5rem;
+    }
+
+    .tab {
+      padding: .9rem 1rem;
+      font-size: .85rem;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color .15s;
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      font-family: inherit;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .tab-content { display: none; flex: 1; overflow: auto; padding: 1.5rem; }
+    .tab-content.active { display: block; }
+
+    /* File Browser */
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+      font-size: .82rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .breadcrumb span { cursor: pointer; color: var(--accent); }
+    .breadcrumb span:hover { text-decoration: underline; }
+    .breadcrumb .sep { color: var(--border); }
+
+    .file-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .file-table th {
+      text-align: left;
+      color: var(--muted);
+      font-size: .75rem;
+      font-weight: 500;
+      padding: .4rem .6rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .file-table td {
+      padding: .5rem .6rem;
+      border-bottom: 1px solid rgba(42,45,58,.5);
+      vertical-align: middle;
+    }
+    .file-table tr:hover td { background: var(--surface2); }
+
+    .file-icon { margin-right: .4rem; }
+    .file-name { cursor: pointer; color: var(--text); }
+    .file-name:hover { color: var(--accent); text-decoration: underline; }
+    .file-dir { font-weight: 500; }
+    .file-size { color: var(--muted); font-family: var(--mono); font-size: .78rem; }
+    .file-mtime { color: var(--muted); font-size: .78rem; }
+
+    .btn-dl {
+      background: rgba(79,142,247,.12);
+      border: 1px solid rgba(79,142,247,.25);
+      color: var(--accent);
+      border-radius: 4px;
+      padding: .25rem .6rem;
+      font-size: .75rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background .15s;
+    }
+    .btn-dl:hover { background: rgba(79,142,247,.22); }
+
+    /* Search */
+    .search-bar {
+      display: flex;
+      gap: .6rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .search-bar input { flex: 1; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: .55rem 1.1rem;
+      font-size: .85rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background .15s;
+      white-space: nowrap;
+    }
+    .btn-primary:hover { background: var(--accent-h); }
+
+    .result-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: .8rem 1rem;
+      margin-bottom: .6rem;
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+    }
+
+    .result-path {
+      flex: 1;
+      font-family: var(--mono);
+      font-size: .8rem;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    .result-snap {
+      font-size: .73rem;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    /* States */
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      padding: 3rem 1rem;
+      font-size: .9rem;
+    }
+
+    .loading {
+      text-align: center;
+      color: var(--muted);
+      padding: 2rem;
+      font-size: .85rem;
+    }
+
+    .msg-error {
+      background: rgba(224,92,92,.1);
+      border: 1px solid rgba(224,92,92,.25);
+      border-radius: 6px;
+      color: var(--error);
+      padding: .7rem 1rem;
+      font-size: .85rem;
+      margin-bottom: 1rem;
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" rx="7" fill="#4f8ef7" fill-opacity=".15"/>
+      <path d="M8 20V10l6-3 6 3v10l-6 3-6-3z" stroke="#4f8ef7" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M14 7v13M8 10l6 3 6-3" stroke="#4f8ef7" stroke-width="1.5" stroke-linejoin="round"/>
+    </svg>
+    Restic WebUI
+  </div>
+  <div class="spacer"></div>
+  <div class="user-badge">
+    {{ user }}
+    <form method="post" action="/logout" style="margin:0">
+      <button class="btn-logout" type="submit">Abmelden</button>
+    </form>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Sidebar -->
+  <aside>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Repository</div>
+      <select id="repoSelect" onchange="loadSnapshots()">
+        {% for repo in repos %}
+        <option value="{{ repo }}">{{ repo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Tag-Filter</div>
+      <select id="tagFilter" onchange="loadSnapshots()">
+        <option value="">Alle</option>
+        <option value="samba">samba</option>
+        <option value="opnsense">opnsense</option>
+      </select>
+    </div>
+
+    <div id="snapshotList" class="snapshot-list">
+      <div class="loading">Lade Snapshots…</div>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <div class="content">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('browser', this)">Dateien</button>
+      <button class="tab" onclick="switchTab('search', this)">Suche</button>
+    </div>
+
+    <!-- File Browser Tab -->
+    <div id="tab-browser" class="tab-content active">
+      <div id="browserEmpty" class="empty">Snapshot aus der linken Liste auswählen</div>
+      <div id="browserContent" style="display:none">
+        <div id="breadcrumb" class="breadcrumb"></div>
+        <table class="file-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Größe</th>
+              <th>Geändert</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="fileTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Search Tab -->
+    <div id="tab-search" class="tab-content">
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Dateiname oder Muster, z.B. rechnung*.pdf"
+               onkeydown="if(event.key==='Enter') doSearch()">
+        <button class="btn-primary" onclick="doSearch()">Suchen</button>
+      </div>
+      <div id="searchResults"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentRepo     = document.getElementById('repoSelect').value;
+  let currentSnapshot = null;
+  let currentPath     = '/';
+  let pathHistory     = ['/'];
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+  }
+
+  // ── Snapshots ─────────────────────────────────────────────────────────────
+
+  async function loadSnapshots() {
+    currentRepo = document.getElementById('repoSelect').value;
+    const tag   = document.getElementById('tagFilter').value;
+    const list  = document.getElementById('snapshotList');
+
+    list.innerHTML = '<div class="loading">Lade…</div>';
+    currentSnapshot = null;
+    resetBrowser();
+
+    try {
+      const url = `/api/${currentRepo}/snapshots` + (tag ? `?tag=${tag}` : '');
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+
+      if (!data.snapshots || data.snapshots.length === 0) {
+        list.innerHTML = '<div class="empty">Keine Snapshots gefunden</div>';
+        return;
+      }
+
+      // Neueste zuerst
+      const snaps = data.snapshots.slice().reverse();
+      list.innerHTML = snaps.map(s => {
+        const d    = new Date(s.time);
+        const date = d.toLocaleDateString('de-DE', {day:'2-digit',month:'2-digit',year:'numeric'});
+        const time = d.toLocaleTimeString('de-DE', {hour:'2-digit',minute:'2-digit'});
+        const tags = (s.tags || []).map(t => `<span class="snap-tag">${t}</span>`).join(' ');
+        return `
+          <div class="snapshot-item" onclick="selectSnapshot('${s.short_id}', this)">
+            <div class="snap-date">${date} ${time}</div>
+            <div class="snap-id">${s.short_id}</div>
+            <div>${tags}</div>
+          </div>`;
+      }).join('');
+    } catch(e) {
+      list.innerHTML = `<div class="msg-error">Fehler: ${e.message}</div>`;
+    }
+  }
+
+  function selectSnapshot(id, el) {
+    document.querySelectorAll('.snapshot-item').forEach(i => i.classList.remove('active'));
+    el.classList.add('active');
+    currentSnapshot = id;
+    currentPath = '/';
+    pathHistory = ['/'];
+
+    // Zum Browser-Tab wechseln
+    document.querySelectorAll('.tab')[0].click();
+    loadFiles('/');
+  }
+
+  // ── File Browser ──────────────────────────────────────────────────────────
+
+  function resetBrowser() {
+    document.getElementById('browserEmpty').style.display = 'block';
+    document.getElementById('browserContent').style.display = 'none';
+  }
+
+  async function loadFiles(path) {
+    if (!currentSnapshot) return;
+    currentPath = path;
+
+    document.getElementById('browserEmpty').style.display = 'none';
+    document.getElementById('browserContent').style.display = 'block';
+
+    const tbody = document.getElementById('fileTableBody');
+    tbody.innerHTML = '<tr><td colspan="4" class="loading">Lade…</td></tr>';
+    renderBreadcrumb(path);
+
+    try {
+      const res = await fetch(`/api/${currentRepo}/ls/${currentSnapshot}?path=${encodeURIComponent(path)}`);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+
+      const entries = data.entries.filter(e => e.struct_type === 'node');
+
+      if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">Leer</td></tr>';
+        return;
+      }
+
+      // Verzeichnisse zuerst
+      entries.sort((a, b) => {
+        if (a.type === b.type) return a.name.localeCompare(b.name);
+        return a.type === 'dir' ? -1 : 1;
+      });
+
+      tbody.innerHTML = entries.map(e => {
+        const isDir   = e.type === 'dir';
+        const icon    = isDir ? '📁' : '📄';
+        const size    = isDir ? '—' : formatSize(e.size || 0);
+        const mtime   = e.mtime ? new Date(e.mtime).toLocaleDateString('de-DE') : '—';
+        const nameCls = isDir ? 'file-name file-dir' : 'file-name';
+        const onclick = isDir
+          ? `navigateTo('${e.path}')`
+          : '';
+
+        return `
+          <tr>
+            <td>
+              <span class="file-icon">${icon}</span>
+              <span class="${nameCls}" onclick="${onclick}">${e.name}</span>
+            </td>
+            <td class="file-size">${size}</td>
+            <td class="file-mtime">${mtime}</td>
+            <td>
+              <button class="btn-dl" onclick="downloadPath('${e.path}', '${e.name}')">
+                ↓ Download
+              </button>
+            </td>
+          </tr>`;
+      }).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="4" class="msg-error">Fehler: ${e.message}</td></tr>`;
+    }
+  }
+
+  function navigateTo(path) {
+    pathHistory.push(path);
+    loadFiles(path);
+  }
+
+  function renderBreadcrumb(path) {
+    const bc  = document.getElementById('breadcrumb');
+    const parts = path.split('/').filter(Boolean);
+    let html  = `<span onclick="navigateToIndex(0)">🏠 /</span>`;
+    let built = '';
+    parts.forEach((p, i) => {
+      built += '/' + p;
+      const snap = built;
+      html += `<span class="sep">/</span><span onclick="navigateToIndex(${i+1})">${p}</span>`;
+    });
+    bc.innerHTML = html;
+
+    // pathHistory synchronisieren
+    pathHistory = ['/'];
+    let b = '';
+    parts.forEach(p => { b += '/' + p; pathHistory.push(b); });
+  }
+
+  function navigateToIndex(idx) {
+    pathHistory = pathHistory.slice(0, idx + 1);
+    loadFiles(pathHistory[idx]);
+  }
+
+  // ── Suche ─────────────────────────────────────────────────────────────────
+
+  async function doSearch() {
+    const pattern = document.getElementById('searchInput').value.trim();
+    if (!pattern) return;
+
+    const results = document.getElementById('searchResults');
+    results.innerHTML = '<div class="loading">Suche läuft…</div>';
+
+    const snapParam = currentSnapshot ? `&snapshot_id=${currentSnapshot}` : '';
+    try {
+      const res = await fetch(`/api/${currentRepo}/find?pattern=${encodeURIComponent(pattern)}${snapParam}`);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+
+      if (!data.results || data.results.length === 0) {
+        results.innerHTML = '<div class="empty">Keine Treffer gefunden</div>';
+        return;
+      }
+
+      results.innerHTML = data.results.map(r => {
+        const hits = (r.matches || [r]).map(m => `
+          <div class="result-item">
+            <span>${m.type === 'dir' ? '📁' : '📄'}</span>
+            <div>
+              <div class="result-path">${m.path}</div>
+              <div class="result-snap">Snapshot: ${r.short || r.snapshot || '—'}</div>
+            </div>
+            <button class="btn-dl" onclick="downloadPath('${m.path}', '${m.path.split('/').pop()}')">
+              ↓ Download
+            </button>
+          </div>`).join('');
+        return hits;
+      }).join('');
+    } catch(e) {
+      results.innerHTML = `<div class="msg-error">Fehler: ${e.message}</div>`;
+    }
+  }
+
+  // ── Download ──────────────────────────────────────────────────────────────
+
+  function downloadPath(path, name) {
+    if (!currentSnapshot) {
+      alert('Bitte zuerst einen Snapshot auswählen.');
+      return;
+    }
+    const url = `/api/${currentRepo}/download/${currentSnapshot}?path=${encodeURIComponent(path)}`;
+    const a   = document.createElement('a');
+    a.href    = url;
+    a.download = name + '.zip';
+    a.click();
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const units = ['B','KB','MB','GB','TB'];
+    const i     = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  loadSnapshots();
+</script>
+</body>
+</html>
