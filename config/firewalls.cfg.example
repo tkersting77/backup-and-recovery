@@ -1,12 +1,42 @@
-# create a backup user with following privileges:
-#  - Diagnostics: Configuration History (for Backup download)
-#  - System: Firmware (for version detection)
+# /config/firewalls.cfg
+# Konfiguration fuer opnsense_backup.py
+# Diese Datei bleibt auf dem Server – NICHT ins Git-Repo committen!
+# firewalls.cfg.example dient als Vorlage und IST im Git-Repo.
 
-FRW_GS40_01_IP="<ip2>"
-FRW_GS40_01_KEY="<key2>"
-FRW_GS40_01_SECRET="<secret2>"
+# Restic Repository
+RESTIC_REPO=/backup/files/restic/firewalls
+RESTIC_PASSWORD_FILE=/etc/restic/firewalls.pwd
 
-FRW_GS70_01_IP="<ip1>"
-FRW_GS70_01_KEY="<key1>"
-FRW_GS70_01_SECRET="<secret1>"
+# Firewalls: Name -> Zugangsdaten
+# Format: FW_<NAME>_IP, FW_<NAME>_KEY, FW_<NAME>_SECRET
+# Namen werden automatisch aus den FW_*_IP Eintraegen ermittelt –
+# einfach weitere Bloecke hinzufuegen fuer neue Firewalls.
+FW_01_IP=10.0.1.1
+FW_01_KEY=api-key-hier
+FW_01_SECRET=api-secret-hier
 
+FW_02_IP=10.0.2.1
+FW_02_KEY=api-key-hier
+FW_02_SECRET=api-secret-hier
+
+FW_03_IP=10.0.3.1
+FW_03_KEY=api-key-hier
+FW_03_SECRET=api-secret-hier
+
+# Restic Labels
+RESTIC_HOST_LABEL=firma-opnsense
+RESTIC_TAG=opnsense
+
+# Logging
+LOG_FILE=/var/log/opnsense-backup.log
+
+# Mail-Benachrichtigung
+NOTIFY_MAIL_TO=admin@firma.de
+NOTIFY_MAIL_FROM=backup@firma.de
+SMTP_HOST=localhost
+
+# Retention Policy
+KEEP_DAILY=7
+KEEP_WEEKLY=4
+KEEP_MONTHLY=12
+KEEP_YEARLY=2

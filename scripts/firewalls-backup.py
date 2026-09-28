@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
 OPNsense Config Backup Script
-- Holt Konfigurations-XMLs von 5 OPNsense-Instanzen per API
-- Sichert sie lokal per Restic (--tag opnsense), getrennte Retention
-  von den Samba-Snapshots
+- Liest Konfiguration aus /config/firewalls.cfg (nicht im Git-Repo!)
+- Holt Konfigurations-XMLs von OPNsense-Instanzen per API
+- Sichert sie lokal per Restic (--tag opnsense)
+- Versendet Mail bei Erfolg und bei Fehler
 - Vollstaendig eigenstaendig, keine Abhaengigkeit zu anderen lokalen Dateien
 """
 
@@ -18,108 +19,103 @@ from pathlib import Path
 import requests
 from requests.auth import HTTPBasicAuth
 import urllib3
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ---------------------------------------------------------------------------
-# Konfiguration
+# Konfiguration laden
 # ---------------------------------------------------------------------------
-PWD = os.path.dirname(os.path.abspath(__file__))
-RESTIC_REPO = os.path.normpath(os.path.join(PWD, "../repositories/firewalls"))
-RESTIC_PASSWORD_FILE = os.path.normpath(os.path.join(PWD, "../config/firewalls.pwd"))
 
-CONFIG_STAGING = Path(os.path.normpath(os.path.join(PWD, "../tmp/firewalls")))
-ENV_FILE = os.path.normpath(os.path.join(PWD, "../config/firewalls.cfg"))
-LOG_FILE = os.path.normpath(os.path.join(PWD, "../log/firewalls.log"))
+CONFIG_FILE = Path(__file__).parent.parent / "config" / "firewalls.cfg"
 
-RESTIC_HOST_LABEL = "firewalls"
-RESTIC_TAG = "opnsense"
 
-# Firewalls: Name -> Zugangsdaten kommen aus der .env
-# Format dort: FRW_<NAME>_IP, FRW_<NAME>_KEY, FRW_<NAME>_SECRET
-FIREWALLS = ["GS10_01", "GS10_02", "GS10_03", "GS40_01", "GS70_01"]
+def load_cfg(path) -> dict:
+    cfg = {}
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Konfigurationsdatei nicht gefunden: {path}")
+    for line in p.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        cfg[k.strip()] = v.strip().strip('"').strip("'")
+    return cfg
 
-NOTIFY_MAIL_TO = "support@bitprofiler.com"
-NOTIFY_MAIL_FROM = "support@bitprofiler.com"
-SMTP_HOST = "localhost"  # lokaler MTA (z.B. Postfix), ggf. anpassen
+
+cfg = load_cfg(CONFIG_FILE)
+
+RESTIC_REPO          = cfg["RESTIC_REPO"]
+RESTIC_PASSWORD_FILE = cfg["RESTIC_PASSWORD_FILE"]
+RESTIC_HOST_LABEL    = cfg.get("RESTIC_HOST_LABEL", "firma-opnsense")
+RESTIC_TAG           = cfg.get("RESTIC_TAG", "opnsense")
+LOG_FILE             = cfg.get("LOG_FILE", "/var/log/opnsense-backup.log")
+NOTIFY_MAIL_TO       = cfg["NOTIFY_MAIL_TO"]
+NOTIFY_MAIL_FROM     = cfg["NOTIFY_MAIL_FROM"]
+SMTP_HOST            = cfg.get("SMTP_HOST", "localhost")
 
 RETENTION = {
-    "keep-daily": "7",      # last 7 days, keep 1 per day
-    "keep-weekly": "4",     # last 4 weeks, keep 1 per week
-    "keep-monthly": "12",   # last 12 months, keep 1 per month
-    "keep-yearly": "2",     # last 2 years, keep 1 per year
+    "keep-daily":   cfg.get("KEEP_DAILY",   "7"),
+    "keep-weekly":  cfg.get("KEEP_WEEKLY",  "4"),
+    "keep-monthly": cfg.get("KEEP_MONTHLY", "12"),
+    "keep-yearly":  cfg.get("KEEP_YEARLY",  "2"),
 }
+
+# Firewall-Namen aus Konfiguration ermitteln (alle FW_*_IP Eintraege)
+FIREWALLS = sorted(set(
+    k[3:-3] for k in cfg if k.startswith("FW_") and k.endswith("_IP")
+))
+
+CONFIG_STAGING = Path("/tmp/opnsense-backup")
 
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
- 
+
 logging.basicConfig(
     filename=LOG_FILE,
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 logger = logging.getLogger("opnsense_backup")
- 
- 
+
+
 def log_and_print(msg: str, level: str = "info") -> None:
     print(msg)
     getattr(logger, level)(msg)
- 
- 
+
+
 # ---------------------------------------------------------------------------
 # Hilfsfunktionen
 # ---------------------------------------------------------------------------
- 
-def load_env_file(path: str) -> dict:
-    """Laedt simple KEY=VALUE Zeilen aus einer .env Datei in ein dict."""
-    env = {}
-    env_path = Path(path)
-    if not env_path.exists():
-        log_and_print(f"WARNUNG: env-Datei {path} nicht gefunden", "warning")
-        return env
- 
-    for line in env_path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        env[key.strip()] = value.strip().strip('"').strip("'")
-    return env
- 
- 
+
 def send_mail(subject: str, body: str) -> None:
     try:
         msg = MIMEText(body)
         msg["Subject"] = subject
         msg["From"] = NOTIFY_MAIL_FROM
         msg["To"] = NOTIFY_MAIL_TO
- 
         with smtplib.SMTP(SMTP_HOST) as smtp:
             smtp.send_message(msg)
     except Exception as exc:
         log_and_print(f"Mail konnte nicht versendet werden: {exc}", "error")
- 
- 
+
+
 def run_restic(args: list, capture: bool = True) -> subprocess.CompletedProcess:
     cmd = [
         "restic",
         "--repo", RESTIC_REPO,
         "--password-file", RESTIC_PASSWORD_FILE,
     ] + args
- 
     log_and_print(f"Restic Befehl: {' '.join(cmd)}")
     return subprocess.run(cmd, capture_output=capture, text=True)
- 
- 
+
+
 def apply_retention(tag: str) -> bool:
-    """Fuehrt forget --prune nur fuer Snapshots mit dem angegebenen Tag aus.
-    Gibt True zurueck wenn erfolgreich, sonst False."""
     args = ["forget", "--prune", "--tag", tag]
     for flag, value in RETENTION.items():
         args += [f"--{flag}", value]
- 
     result = run_restic(args)
- 
     if result.stdout:
         logger.info(result.stdout)
     if result.returncode != 0:
@@ -129,84 +125,73 @@ def apply_retention(tag: str) -> bool:
             f"Forget/Prune (OPNsense) ist fehlgeschlagen.\n\n{result.stderr}",
         )
         return False
- 
     return True
- 
- 
+
+
 # ---------------------------------------------------------------------------
 # Config Download
 # ---------------------------------------------------------------------------
- 
+
 def download_configs() -> tuple[int, list[str]]:
-    """Laedt Configs aller Firewalls herunter.
-    Gibt (Anzahl Fehler, Liste erfolgreich gesicherter Namen) zurueck."""
-    env = load_env_file(ENV_FILE)
     CONFIG_STAGING.mkdir(parents=True, exist_ok=True)
- 
     errors = 0
     successful = []
- 
+
     for name in FIREWALLS:
-        ip = env.get(f"FRW_{name}_IP")
-        key = env.get(f"FRW_{name}_KEY")
-        secret = env.get(f"FRW_{name}_SECRET")
- 
+        ip     = cfg.get(f"FW_{name}_IP")
+        key    = cfg.get(f"FW_{name}_KEY")
+        secret = cfg.get(f"FW_{name}_SECRET")
+
         if not all([ip, key, secret]):
             log_and_print(f"FEHLER: Zugangsdaten fuer {name} unvollstaendig", "error")
             errors += 1
             continue
- 
+
         log_and_print(f"Hole Config von {name} ({ip})...")
- 
+
         try:
             response = requests.get(
                 f"https://{ip}/api/core/backup/download/this",
                 auth=HTTPBasicAuth(key, secret),
-                verify=False,   # selbstsigniertes Zertifikat
+                verify=False,
                 timeout=30,
             )
         except requests.RequestException as exc:
             log_and_print(f"FEHLER: {name} nicht erreichbar ({exc})", "error")
             errors += 1
             continue
- 
+
         if response.status_code != 200:
             log_and_print(f"FEHLER: {name} HTTP {response.status_code}", "error")
             errors += 1
             continue
- 
-        # Sicherstellen, dass tatsaechlich XML zurueckkam und kein Fehlertext/JSON
+
         content = response.content
         if not content.lstrip().startswith(b"<?xml"):
-            log_and_print(
-                f"FEHLER: {name} Antwort ist kein XML (evtl. Fehlertext)", "error"
-            )
+            log_and_print(f"FEHLER: {name} Antwort ist kein XML", "error")
             errors += 1
             continue
- 
+
         target_file = CONFIG_STAGING / f"{name}-config.xml"
         target_file.write_bytes(content)
-        # mtime explizit aktualisieren, damit Restic die Datei als geaendert erkennt,
-        # selbst wenn der Inhalt identisch zum letzten Lauf ist
         os.utime(target_file, None)
- 
         log_and_print(f"OK: {name}")
         successful.append(name)
- 
+
     if errors:
         send_mail(
             "⚠️ OPNsense Backup Fehler",
-            f"{errors} von {len(FIREWALLS)} Firewalls konnten nicht gesichert werden. "
+            f"{errors} von {len(FIREWALLS)} Firewalls konnten nicht gesichert werden.\n"
             f"Details im Log: {LOG_FILE}",
         )
- 
+
     return errors, successful
- 
- 
+
+
 # ---------------------------------------------------------------------------
 # Restic Backup
 # ---------------------------------------------------------------------------
- 
+
 def backup_configs() -> bool:
     args = [
         "backup",
@@ -215,14 +200,11 @@ def backup_configs() -> bool:
         "--verbose",
         str(CONFIG_STAGING),
     ]
- 
     result = run_restic(args)
- 
     if result.stdout:
         logger.info(result.stdout)
     if result.stderr:
         logger.error(result.stderr)
- 
     if result.returncode != 0:
         log_and_print("OPNsense Restic Backup FEHLGESCHLAGEN", "error")
         send_mail(
@@ -230,37 +212,34 @@ def backup_configs() -> bool:
             f"Restic backup (OPNsense) ist fehlgeschlagen.\n\n{result.stderr}",
         )
         return False
- 
     log_and_print("OPNsense Backup erfolgreich.")
     return True
- 
- 
+
+
 def cleanup_staging() -> None:
     for f in CONFIG_STAGING.glob("*.xml"):
         f.unlink()
- 
- 
+
+
 def main() -> None:
     start = datetime.now()
     log_and_print(f"=== OPNsense Backup Start {start:%Y-%m-%d %H:%M:%S} ===")
- 
+
     download_errors, successful_firewalls = download_configs()
     backup_ok = backup_configs()
- 
+
     retention_ok = True
     if backup_ok:
         retention_ok = apply_retention(RESTIC_TAG)
- 
+
     cleanup_staging()
- 
+
     end = datetime.now()
     duration = end - start
     log_and_print(
         f"=== OPNsense Backup Ende {end:%Y-%m-%d %H:%M:%S} (Dauer: {duration}) ==="
     )
- 
-    # Erfolgs-Mail nur wenn wirklich ALLES geklappt hat:
-    # Download ohne Fehler, Restic-Backup ok, Retention ok
+
     if download_errors == 0 and backup_ok and retention_ok:
         send_mail(
             "✅ OPNsense Backup erfolgreich",
@@ -274,8 +253,7 @@ def main() -> None:
                 f"Log: {LOG_FILE}"
             ),
         )
- 
- 
+
+
 if __name__ == "__main__":
     main()
- 
