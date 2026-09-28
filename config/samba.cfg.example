@@ -35,6 +35,15 @@ NOTIFY_MAIL_FROM=backup@firma.de
 SMTP_HOST=localhost
 
 # Retention Policy
+# Nach jedem erfolgreichen Backup per "restic forget --prune" angewendet.
+# Restic behaelt pro Zeit-Bucket jeweils den neuesten Snapshot, alles andere
+# wird geloescht:
+#   KEEP_DAILY=7    -> von den letzten 7 Tagen je 1 Snapshot/Tag
+#   KEEP_WEEKLY=4   -> danach von den letzten 4 Wochen je 1 Snapshot/Woche
+#   KEEP_MONTHLY=12 -> danach von den letzten 12 Monaten je 1 Snapshot/Monat
+#   KEEP_YEARLY=2   -> danach von den letzten 2 Jahren je 1 Snapshot/Jahr
+# Die Buckets ueberlappen sich nicht (kein Snapshot zaehlt doppelt), gelten
+# nur fuer Snapshots mit RESTIC_TAG dieser Datei.
 KEEP_DAILY=7
 KEEP_WEEKLY=4
 KEEP_MONTHLY=12
