@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Restic WebUI – Backend
+Datensicherung – Backend
 FastAPI + LDAP-Auth (Samba AD) + Restic CLI Wrapper
 """
 
@@ -104,7 +104,7 @@ logger = logging.getLogger("restic_webui")
 # FastAPI App
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="Restic WebUI", docs_url=None, redoc_url=None)
+app = FastAPI(title="Datensicherung", docs_url=None, redoc_url=None)
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 # ---------------------------------------------------------------------------
@@ -118,16 +118,33 @@ def ldap_authenticate(username: str, password: str) -> bool:
         bind_user = f"{username}@{AD_DOMAIN}"
         conn = Connection(server, user=bind_user, password=password, auto_bind=True)
 
-        # Gruppenmitgliedschaft prüfen
+        # Gruppen-DN auflösen (unabhaengig davon, in welcher OU die Gruppe liegt)
         conn.search(
             search_base=AD_BASE_DN,
-            search_filter=f"(&(sAMAccountName={username})(memberOf=CN={AD_GROUP},CN=Users,{AD_BASE_DN}))",
+            search_filter=f"(&(objectClass=group)(cn={AD_GROUP}))",
+            search_scope=SUBTREE,
+            attributes=["distinguishedName"],
+        )
+        if not conn.entries:
+            logger.error(f"LDAP-Gruppe '{AD_GROUP}' unter {AD_BASE_DN} nicht gefunden")
+            return False
+        group_dn = conn.entries[0].entry_dn
+
+        # Gruppenmitgliedschaft pruefen (inkl. verschachtelter Gruppen via
+        # LDAP_MATCHING_RULE_IN_CHAIN – memberOf allein listet nur direkte Mitglieder)
+        conn.search(
+            search_base=AD_BASE_DN,
+            search_filter=(
+                f"(&(sAMAccountName={username})"
+                f"(memberOf:1.2.840.113556.1.4.1941:={group_dn}))"
+            ),
             search_scope=SUBTREE,
             attributes=ALL_ATTRIBUTES,
         )
         return len(conn.entries) > 0
 
-    except LDAPException:
+    except LDAPException as exc:
+        logger.error(f"LDAP-Fehler bei Login von {username}: {exc}")
         return False
 
 
