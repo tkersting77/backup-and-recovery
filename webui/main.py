@@ -335,13 +335,12 @@ async def find_files(
 
     raw = run_restic(repo_path, password_file, args)
 
-    results = []
-    for line in raw.splitlines():
-        try:
-            entry = json.loads(line)
-            results.append(entry)
-        except json.JSONDecodeError:
-            continue
+    # restic find --json liefert ein einziges JSON-Array (wie "snapshots"),
+    # kein NDJSON wie "ls" – deshalb den gesamten Output als ein Dokument parsen.
+    try:
+        results = json.loads(raw)
+    except json.JSONDecodeError:
+        results = []
 
     return {"pattern": pattern, "results": results}
 
