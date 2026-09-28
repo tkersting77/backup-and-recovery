@@ -8,20 +8,20 @@ RESTIC_REPO=/backup/files/restic/firewalls
 RESTIC_PASSWORD_FILE=/etc/restic/firewalls.pwd
 
 # Firewalls: Name -> Zugangsdaten
-# Format: FW_<NAME>_IP, FW_<NAME>_KEY, FW_<NAME>_SECRET
-# Namen werden automatisch aus den FW_*_IP Eintraegen ermittelt –
+# Format: FRW_<NAME>_IP, FRW_<NAME>_KEY, FRW_<NAME>_SECRET
+# Namen werden automatisch aus den FRW_*_IP Eintraegen ermittelt –
 # einfach weitere Bloecke hinzufuegen fuer neue Firewalls.
-FW_01_IP=10.0.1.1
-FW_01_KEY=api-key-hier
-FW_01_SECRET=api-secret-hier
+FRW_01_IP=10.0.1.1
+FRW_01_KEY=api-key-hier
+FRW_01_SECRET=api-secret-hier
 
-FW_02_IP=10.0.2.1
-FW_02_KEY=api-key-hier
-FW_02_SECRET=api-secret-hier
+FRW_02_IP=10.0.2.1
+FRW_02_KEY=api-key-hier
+FRW_02_SECRET=api-secret-hier
 
-FW_03_IP=10.0.3.1
-FW_03_KEY=api-key-hier
-FW_03_SECRET=api-secret-hier
+FRW_03_IP=10.0.3.1
+FRW_03_KEY=api-key-hier
+FRW_03_SECRET=api-secret-hier
 
 # Restic Labels
 RESTIC_HOST_LABEL=firma-opnsense

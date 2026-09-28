@@ -61,9 +61,9 @@ RETENTION = {
     "keep-yearly":  cfg.get("KEEP_YEARLY",  "2"),
 }
 
-# Firewall-Namen aus Konfiguration ermitteln (alle FW_*_IP Eintraege)
+# Firewall-Namen aus Konfiguration ermitteln (alle FRW_*_IP Eintraege)
 FIREWALLS = sorted(set(
-    k[3:-3] for k in cfg if k.startswith("FW_") and k.endswith("_IP")
+    k[4:-3] for k in cfg if k.startswith("FRW_") and k.endswith("_IP")
 ))
 
 CONFIG_STAGING = Path(__file__).parent.parent / "tmp" / "firewalls"
@@ -138,9 +138,9 @@ def download_configs() -> tuple[int, list[str]]:
     successful = []
 
     for name in FIREWALLS:
-        ip     = cfg.get(f"FW_{name}_IP")
-        key    = cfg.get(f"FW_{name}_KEY")
-        secret = cfg.get(f"FW_{name}_SECRET")
+        ip     = cfg.get(f"FRW_{name}_IP")
+        key    = cfg.get(f"FRW_{name}_KEY")
+        secret = cfg.get(f"FRW_{name}_SECRET")
 
         if not all([ip, key, secret]):
             log_and_print(f"FEHLER: Zugangsdaten fuer {name} unvollstaendig", "error")
@@ -228,13 +228,13 @@ def main() -> None:
     if not FIREWALLS:
         log_and_print(
             f"FEHLER: Keine Firewalls in {CONFIG_FILE} gefunden "
-            "(erwartet: FW_<NAME>_IP / FW_<NAME>_KEY / FW_<NAME>_SECRET) – Backup abgebrochen.",
+            "(erwartet: FRW_<NAME>_IP / FRW_<NAME>_KEY / FRW_<NAME>_SECRET) – Backup abgebrochen.",
             "error",
         )
         send_mail(
             "⚠️ OPNsense Backup Fehler",
             f"Keine Firewalls in {CONFIG_FILE} gefunden.\n"
-            "Erwartetes Format: FW_<NAME>_IP / FW_<NAME>_KEY / FW_<NAME>_SECRET\n"
+            "Erwartetes Format: FRW_<NAME>_IP / FRW_<NAME>_KEY / FRW_<NAME>_SECRET\n"
             "Backup wurde abgebrochen, es wurde kein Snapshot erstellt.",
         )
         return

@@ -77,8 +77,8 @@ nano config/firewalls.cfg
 nano config/webui.cfg
 ```
 
-Für `firewalls.cfg` gilt: Firewalls werden anhand aller `FW_<NAME>_IP`-Einträge automatisch erkannt –
-für eine weitere Firewall einfach einen zusätzlichen `FW_<NAME>_IP/_KEY/_SECRET`-Block hinzufügen.
+Für `firewalls.cfg` gilt: Firewalls werden anhand aller `FRW_<NAME>_IP`-Einträge automatisch erkannt –
+für eine weitere Firewall einfach einen zusätzlichen `FRW_<NAME>_IP/_KEY/_SECRET`-Block hinzufügen.
 
 ### 5. Python-Abhängigkeiten installieren
 
