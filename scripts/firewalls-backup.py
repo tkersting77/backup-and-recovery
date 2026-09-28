@@ -101,14 +101,14 @@ def send_mail(subject: str, body: str) -> None:
         log_and_print(f"Mail konnte nicht versendet werden: {exc}", "error")
 
 
-def run_restic(args: list, capture: bool = True) -> subprocess.CompletedProcess:
+def run_restic(args: list, capture: bool = True, cwd=None) -> subprocess.CompletedProcess:
     cmd = [
         "restic",
         "--repo", RESTIC_REPO,
         "--password-file", RESTIC_PASSWORD_FILE,
     ] + args
-    log_and_print(f"Restic Befehl: {' '.join(cmd)}")
-    return subprocess.run(cmd, capture_output=capture, text=True)
+    log_and_print(f"Restic Befehl: {' '.join(cmd)}" + (f" (cwd={cwd})" if cwd else ""))
+    return subprocess.run(cmd, capture_output=capture, text=True, cwd=cwd)
 
 
 def apply_retention(tag: str) -> bool:
@@ -198,9 +198,11 @@ def backup_configs() -> bool:
         "--host", RESTIC_HOST_LABEL,
         "--tag", RESTIC_TAG,
         "--verbose",
-        str(CONFIG_STAGING),
+        CONFIG_STAGING.name,
     ]
-    result = run_restic(args)
+    # cwd=Staging-Elternverzeichnis, damit restic nur den Ordnernamen
+    # ("firewalls") als Wurzel im Snapshot speichert statt des vollen Pfads.
+    result = run_restic(args, cwd=CONFIG_STAGING.parent)
     if result.stdout:
         logger.info(result.stdout)
     if result.stderr:
