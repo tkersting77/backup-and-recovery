@@ -2,13 +2,18 @@
 # Konfiguration fuer die Restic WebUI
 # Diese Datei bleibt auf dem Server – NICHT ins Git-Repo committen!
 
-# Restic Passwort-Datei (gilt fuer alle Repos)
-RESTIC_PASSWORD_FILE=/etc/restic/password.txt
-
 # Repositories: REPO_<NAME>=<Pfad>
 # Name wird klein geschrieben in der UI angezeigt
-REPO_FIRMA=/backup/files/restic/firma
-REPO_OPNSENSE=/backup/files/restic/opnsense
+REPO_FILES=/backup/files/restic/files
+REPO_FIREWALLS=/backup/files/restic/opnsense
+
+# Passwort-Datei pro Repository: REPO_<NAME>_PASSWORD_FILE=<Pfad>
+# Falls ein Repo kein eigenes Passwort hat, wird RESTIC_PASSWORD_FILE_DEFAULT verwendet
+REPO_FILES_PASSWORD_FILE=/etc/restic/password-files.txt
+REPO_FIREWALLS_PASSWORD_FILE=/etc/restic/password-firewalls.txt
+
+# Fallback falls kein repo-spezifisches Passwort definiert ist
+RESTIC_PASSWORD_FILE_DEFAULT=/etc/restic/password.txt
 
 # Samba Active Directory
 AD_SERVER=ldap://10.8.0.x

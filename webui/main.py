@@ -49,14 +49,31 @@ def load_cfg(path: str) -> dict:
 
 cfg = load_cfg(CONFIG_FILE)
 
-# Repos: REPO_FIRMA=/pfad, REPO_OPNSENSE=/pfad → {"firma": "/pfad", ...}
+# Repos: REPO_FIRMA=/pfad → {"firma": "/pfad"}
+# Passwörter: REPO_FIRMA_PASSWORD_FILE=/pfad → {"firma": "/pfad"}
+# Fallback: RESTIC_PASSWORD_FILE_DEFAULT
 REPOS: dict[str, str] = {}
+REPO_PASSWORDS: dict[str, str] = {}
+DEFAULT_PASSWORD_FILE = cfg.get("RESTIC_PASSWORD_FILE_DEFAULT", "")
+
 for key, val in cfg.items():
-    if key.startswith("REPO_"):
+    if key.startswith("REPO_") and key.endswith("_PASSWORD_FILE"):
+        name = key[5:-14].lower()
+        REPO_PASSWORDS[name] = val
+    elif key.startswith("REPO_") and not key.endswith("_PASSWORD_FILE"):
         name = key[5:].lower()
         REPOS[name] = val
 
-RESTIC_PASSWORD_FILE = cfg["RESTIC_PASSWORD_FILE"]
+
+def get_password_file(repo: str) -> str:
+    """Gibt die Passwort-Datei fuer ein Repository zurueck."""
+    pw = REPO_PASSWORDS.get(repo) or DEFAULT_PASSWORD_FILE
+    if not pw:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Keine Passwort-Datei fuer Repository '{repo}' konfiguriert"
+        )
+    return pw
 AD_SERVER            = cfg["AD_SERVER"]
 AD_DOMAIN            = cfg["AD_DOMAIN"]
 AD_BASE_DN           = cfg["AD_BASE_DN"]
@@ -112,11 +129,11 @@ def get_session(session_token: Optional[str] = Cookie(default=None)) -> str:
 # Restic Wrapper
 # ---------------------------------------------------------------------------
 
-def run_restic(repo_path: str, args: list) -> dict:
+def run_restic(repo_path: str, password_file: str, args: list) -> str:
     cmd = [
         "restic",
         "--repo", repo_path,
-        "--password-file", RESTIC_PASSWORD_FILE,
+        "--password-file", password_file,
         "--json",
     ] + args
 
@@ -208,11 +225,12 @@ async def list_repos(user: str = Depends(get_session)):
 @app.get("/api/{repo}/snapshots")
 async def list_snapshots(repo: str, tag: Optional[str] = None, user: str = Depends(get_session)):
     repo_path = get_repo_path(repo)
+    password_file = get_password_file(repo)
     args = ["snapshots"]
     if tag:
         args += ["--tag", tag]
 
-    raw = run_restic(repo_path, args)
+    raw = run_restic(repo_path, password_file, args)
 
     # Restic gibt ein JSON-Array zurück
     try:
@@ -235,7 +253,8 @@ async def list_files(
     user: str = Depends(get_session),
 ):
     repo_path = get_repo_path(repo)
-    raw = run_restic(repo_path, ["ls", snapshot_id, path])
+    password_file = get_password_file(repo)
+    raw = run_restic(repo_path, password_file, ["ls", snapshot_id, path])
 
     entries = []
     for line in raw.splitlines():
@@ -256,11 +275,12 @@ async def find_files(
     user: str = Depends(get_session),
 ):
     repo_path = get_repo_path(repo)
+    password_file = get_password_file(repo)
     args = ["find", pattern]
     if snapshot_id:
         args += ["--snapshot", snapshot_id]
 
-    raw = run_restic(repo_path, args)
+    raw = run_restic(repo_path, password_file, args)
 
     results = []
     for line in raw.splitlines():
@@ -285,6 +305,7 @@ async def download(
     user: str = Depends(get_session),
 ):
     repo_path = get_repo_path(repo)
+    password_file = get_password_file(repo)
 
     # Restic restore in temporäres Verzeichnis
     tmp_dir = tempfile.mkdtemp(prefix="restic-restore-")
@@ -293,7 +314,7 @@ async def download(
         cmd = [
             "restic",
             "--repo", repo_path,
-            "--password-file", RESTIC_PASSWORD_FILE,
+            "--password-file", password_file,
             "restore", snapshot_id,
             "--target", tmp_dir,
             "--include", path,
