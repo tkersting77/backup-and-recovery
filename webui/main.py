@@ -244,6 +244,11 @@ async def login(
     return resp
 
 
+@app.get("/logout")
+async def logout_redirect():
+    return Response(status_code=302, headers={"Location": "/"})
+
+
 @app.post("/logout")
 async def logout(response: Response, session_token: Optional[str] = Cookie(default=None)):
     if session_token and session_token in sessions:
