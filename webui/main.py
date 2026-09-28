@@ -334,7 +334,12 @@ async def find_files(
 ):
     repo_path = get_repo_path(repo)
     password_file = get_password_file(repo)
-    args = ["find", pattern]
+
+    # restic find matcht als Glob-Muster, nicht als Substring – ohne eigene
+    # Wildcards vom Nutzer automatisch zu einer Teilstring-Suche machen.
+    search_pattern = pattern if any(c in pattern for c in "*?[") else f"*{pattern}*"
+
+    args = ["find", search_pattern]
     if snapshot_id:
         args += ["--snapshot", snapshot_id]
 
