@@ -225,6 +225,20 @@ def main() -> None:
     start = datetime.now()
     log_and_print(f"=== OPNsense Backup Start {start:%Y-%m-%d %H:%M:%S} ===")
 
+    if not FIREWALLS:
+        log_and_print(
+            f"FEHLER: Keine Firewalls in {CONFIG_FILE} gefunden "
+            "(erwartet: FW_<NAME>_IP / FW_<NAME>_KEY / FW_<NAME>_SECRET) – Backup abgebrochen.",
+            "error",
+        )
+        send_mail(
+            "⚠️ OPNsense Backup Fehler",
+            f"Keine Firewalls in {CONFIG_FILE} gefunden.\n"
+            "Erwartetes Format: FW_<NAME>_IP / FW_<NAME>_KEY / FW_<NAME>_SECRET\n"
+            "Backup wurde abgebrochen, es wurde kein Snapshot erstellt.",
+        )
+        return
+
     download_errors, successful_firewalls = download_configs()
     backup_ok = backup_configs()
 
