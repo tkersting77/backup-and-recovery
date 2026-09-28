@@ -25,6 +25,7 @@ backup-and-recovery/
 ├── systemd/                    Systemd Service- und Timer-Dateien
 ├── log/                        Log-Verzeichnis (Platzhalter, .gitkeep)
 ├── repositories/                Lokale Restic-Repositories (Platzhalter, .gitkeep)
+├── tmp/firewalls/                Staging fuer heruntergeladene OPNsense-Configs (vor dem Restic-Backup)
 ├── requirements.txt             Python-Abhängigkeiten für Backup-Skripte + WebUI
 ├── README.md
 └── .gitignore

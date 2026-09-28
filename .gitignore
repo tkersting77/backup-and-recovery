@@ -2,6 +2,10 @@
 repositories/*
 !repositories/.gitkeep
 
+# Firewall-Staging (heruntergeladene Configs, temporaer)
+tmp/firewalls/*
+!tmp/firewalls/.gitkeep
+
 # Konfigurationsdateien mit echten Zugangsdaten – niemals ins Repo!
 *.cfg
 *.env

@@ -66,7 +66,7 @@ FIREWALLS = sorted(set(
     k[3:-3] for k in cfg if k.startswith("FW_") and k.endswith("_IP")
 ))
 
-CONFIG_STAGING = Path("/tmp/opnsense-backup")
+CONFIG_STAGING = Path(__file__).parent.parent / "tmp" / "firewalls"
 
 # ---------------------------------------------------------------------------
 # Logging
