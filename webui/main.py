@@ -203,6 +203,11 @@ async def root(request: Request, session_token: Optional[str] = Cookie(default=N
     return templates.TemplateResponse("login.html", {"request": request, "error": None})
 
 
+@app.get("/login")
+async def login_redirect():
+    return Response(status_code=302, headers={"Location": "/"})
+
+
 @app.post("/login", response_class=HTMLResponse)
 async def login(
     request: Request,
