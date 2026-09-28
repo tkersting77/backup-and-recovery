@@ -6,6 +6,7 @@ FastAPI + LDAP-Auth (Samba AD) + Restic CLI Wrapper
 
 import io
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -80,9 +81,24 @@ AD_BASE_DN           = cfg["AD_BASE_DN"]
 AD_GROUP             = cfg["AD_GROUP"]
 SECRET_KEY           = cfg["SECRET_KEY"]
 SESSION_MINUTES      = int(cfg.get("SESSION_EXPIRE_MINUTES", "60"))
+LOG_FILE             = cfg.get("LOG_FILE", "/var/log/restic-webui.log")
 
 # In-Memory Session Store {token: {user, expires}}
 sessions: dict[str, dict] = {}
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(),          # weiterhin auch im Journal sichtbar
+    ],
+)
+logger = logging.getLogger("restic_webui")
 
 # ---------------------------------------------------------------------------
 # FastAPI App
@@ -178,6 +194,7 @@ async def login(
     password: str = Form(...),
 ):
     if not ldap_authenticate(username, password):
+        logger.warning(f"Fehlgeschlagener Login-Versuch: {username} von {request.client.host}")
         return templates.TemplateResponse(
             "login.html",
             {"request": request, "error": "Ungültige Zugangsdaten oder fehlende Berechtigung"},
@@ -189,6 +206,7 @@ async def login(
         "user": username,
         "expires": datetime.utcnow() + timedelta(minutes=SESSION_MINUTES),
     }
+    logger.info(f"Login erfolgreich: {username} von {request.client.host}")
 
     resp = templates.TemplateResponse("index.html", {
         "request": request,
@@ -207,7 +225,9 @@ async def login(
 @app.post("/logout")
 async def logout(response: Response, session_token: Optional[str] = Cookie(default=None)):
     if session_token and session_token in sessions:
+        user = sessions[session_token]["user"]
         del sessions[session_token]
+        logger.info(f"Logout: {user}")
     response = Response(status_code=302, headers={"Location": "/"})
     response.delete_cookie("session_token")
     return response
@@ -306,6 +326,8 @@ async def download(
 ):
     repo_path = get_repo_path(repo)
     password_file = get_password_file(repo)
+
+    logger.info(f"Download: user={user} repo={repo} snapshot={snapshot_id} path={path}")
 
     # Restic restore in temporäres Verzeichnis
     tmp_dir = tempfile.mkdtemp(prefix="restic-restore-")

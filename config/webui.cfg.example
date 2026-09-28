@@ -4,13 +4,13 @@
 
 # Repositories: REPO_<NAME>=<Pfad>
 # Name wird klein geschrieben in der UI angezeigt
-REPO_FILES=/backup/files/restic/files
-REPO_FIREWALLS=/backup/files/restic/opnsense
+REPO_FIRMA=/backup/files/restic/firma
+REPO_OPNSENSE=/backup/files/restic/opnsense
 
 # Passwort-Datei pro Repository: REPO_<NAME>_PASSWORD_FILE=<Pfad>
 # Falls ein Repo kein eigenes Passwort hat, wird RESTIC_PASSWORD_FILE_DEFAULT verwendet
-REPO_FILES_PASSWORD_FILE=/etc/restic/password-files.txt
-REPO_FIREWALLS_PASSWORD_FILE=/etc/restic/password-firewalls.txt
+REPO_FIRMA_PASSWORD_FILE=/etc/restic/password-firma.txt
+REPO_OPNSENSE_PASSWORD_FILE=/etc/restic/password-opnsense.txt
 
 # Fallback falls kein repo-spezifisches Passwort definiert ist
 RESTIC_PASSWORD_FILE_DEFAULT=/etc/restic/password.txt
@@ -24,3 +24,6 @@ AD_GROUP=ResticAdmins
 # Session
 SECRET_KEY=hier-einen-langen-zufaelligen-string-eintragen
 SESSION_EXPIRE_MINUTES=60
+
+# Logging
+LOG_FILE=/var/log/restic-webui.log
