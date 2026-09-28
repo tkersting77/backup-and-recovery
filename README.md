@@ -1,6 +1,7 @@
 # Firma Backup – Restic + OPNsense + WebUI
 
-Backup-Lösung für den Firma-Samba-Server und fünf OPNsense-Firewall-Instanzen.
+Backup-Lösung für den Firma-Samba-Server und eine beliebige Anzahl von OPNsense-Firewall-Instanzen
+(Firewalls werden automatisch aus der Konfigurationsdatei ermittelt, kein Code-Change nötig).
 Betrieben auf einem Debian-LXC-Container auf Proxmox, verbunden per OpenVPN.
 
 ---
@@ -8,21 +9,23 @@ Betrieben auf einem Debian-LXC-Container auf Proxmox, verbunden per OpenVPN.
 ## Projektstruktur
 
 ```
-firma-backup/
+backup-and-recovery/
 ├── scripts/
-│   ├── samba_backup.py        Samba-Freigaben per Restic Pull via SFTP
-│   └── opnsense_backup.py     OPNsense-Configs per API + Restic
+│   ├── samba-backup.py         Samba-Freigaben per Restic Pull via SFTP
+│   └── firewalls-backup.py     OPNsense-Configs per API + Restic
 ├── webui/
-│   ├── main.py                FastAPI Backend
-│   ├── requirements.txt
+│   ├── main.py                 FastAPI Backend (LDAP/AD-Auth + Restic-CLI-Wrapper)
 │   └── templates/
 │       ├── login.html
 │       └── index.html
 ├── config/
-│   ├── samba.cfg.example      Vorlage – auf dem Server als samba.cfg ablegen
-│   ├── opnsense.cfg.example   Vorlage – auf dem Server als opnsense.cfg ablegen
-│   └── webui.cfg.example      Vorlage – auf dem Server als webui.cfg ablegen
-├── systemd/                   Systemd Service- und Timer-Dateien
+│   ├── samba.cfg.example       Vorlage – auf dem Server als samba.cfg ablegen
+│   ├── firewalls.cfg.example   Vorlage – auf dem Server als firewalls.cfg ablegen
+│   └── webui.cfg.example       Vorlage – auf dem Server als webui.cfg ablegen
+├── systemd/                    Systemd Service- und Timer-Dateien
+├── log/                        Log-Verzeichnis (Platzhalter, .gitkeep)
+├── repositories/                Lokale Restic-Repositories (Platzhalter, .gitkeep)
+├── requirements.txt             Python-Abhängigkeiten für Backup-Skripte + WebUI
 ├── README.md
 └── .gitignore
 ```
@@ -45,11 +48,17 @@ apt update && apt install -y restic
 restic self-update
 ```
 
-### 3. Restic Repository initialisieren
+### 3. Restic Repositories initialisieren
+
+Ein Repository für die Samba-Daten, eines für die Firewall-Configs:
 
 ```bash
 mkdir -p /backup/files/restic/firma
 restic init --repo /backup/files/restic/firma
+
+mkdir -p /backup/files/restic/opnsense
+restic init --repo /backup/files/restic/opnsense
+
 mkdir -p /etc/restic
 echo "dein-passwort" > /etc/restic/password.txt
 chmod 600 /etc/restic/password.txt
@@ -59,23 +68,24 @@ chmod 600 /etc/restic/password.txt
 
 ```bash
 cp config/samba.cfg.example config/samba.cfg
-cp config/opnsense.cfg.example config/opnsense.cfg
+cp config/firewalls.cfg.example config/firewalls.cfg
 cp config/webui.cfg.example config/webui.cfg
 # Werte anpassen:
 nano config/samba.cfg
-nano config/opnsense.cfg
+nano config/firewalls.cfg
 nano config/webui.cfg
 ```
+
+Für `firewalls.cfg` gilt: Firewalls werden anhand aller `FW_<NAME>_IP`-Einträge automatisch erkannt –
+für eine weitere Firewall einfach einen zusätzlichen `FW_<NAME>_IP/_KEY/_SECRET`-Block hinzufügen.
 
 ### 5. Python-Abhängigkeiten installieren
 
 ```bash
-# Fuer Backup-Skripte
-apt install -y python3-requests
-
-# Fuer WebUI
-pip install -r webui/requirements.txt --break-system-packages
+pip install -r requirements.txt --break-system-packages
 ```
+
+(Deckt sowohl die Backup-Skripte als auch die WebUI ab: FastAPI, Uvicorn, Jinja2, ldap3, requests, urllib3.)
 
 ### 6. Systemd Timer aktivieren
 
@@ -86,6 +96,9 @@ systemctl enable --now samba-backup.timer
 systemctl enable --now opnsense-backup.timer
 ```
 
+> ⚠️ Vor dem Aktivieren prüfen, ob `ExecStart` in den `.service`-Dateien exakt auf die
+> tatsächlichen Skriptnamen in `scripts/` zeigt (`samba-backup.py`, `firewalls-backup.py`).
+
 ### 7. WebUI starten (optional)
 
 ```bash
@@ -95,20 +108,42 @@ systemctl enable --now restic-webui
 # Erreichbar unter http://<server-ip>:8080
 ```
 
+`WorkingDirectory` und `ExecStart` in `restic-webui.service` müssen auf das `webui/`-Verzeichnis
+dieses Repos zeigen (dort liegt `main.py`).
+
 ---
 
 ## Manuell ausführen
 
 ```bash
 # Samba-Backup
-python3 /opt/firma-backup/scripts/samba_backup.py
+python3 /opt/firma-backup/scripts/samba-backup.py
 
 # Samba-Backup Dry-Run (kein Snapshot, keine Mail)
-python3 /opt/firma-backup/scripts/samba_backup.py --dry-run
+python3 /opt/firma-backup/scripts/samba-backup.py --dry-run
 
 # OPNsense-Backup
-python3 /opt/firma-backup/scripts/opnsense_backup.py
+python3 /opt/firma-backup/scripts/firewalls-backup.py
 ```
+
+---
+
+## WebUI
+
+FastAPI-Anwendung zum Durchsuchen und Wiederherstellen von Restic-Snapshots im Browser.
+
+- **Login** gegen Samba/Active Directory per LDAP (`webui.cfg`: `AD_SERVER`, `AD_DOMAIN`,
+  `AD_BASE_DN`, `AD_GROUP`) – nur Mitglieder der konfigurierten Gruppe erhalten Zugriff.
+- **Mehrere Restic-Repositories** gleichzeitig nutzbar, je Eintrag `REPO_<NAME>` in `webui.cfg`
+  (eigenes Passwort pro Repo möglich, sonst Fallback `RESTIC_PASSWORD_FILE_DEFAULT`).
+- **Snapshots auflisten**, optional gefiltert nach Tag (`/api/{repo}/snapshots`).
+- **Dateibaum ansehen** (`/api/{repo}/ls/{snapshot_id}`) und **Volltextsuche** über Dateinamen
+  (`/api/{repo}/find`).
+- **Download** einzelner Dateien oder ganzer Ordner als ZIP direkt aus dem Snapshot
+  (`/api/{repo}/download/{snapshot_id}`), Restore erfolgt serverseitig in ein temporäres
+  Verzeichnis und wird danach wieder aufgeräumt.
+- Sessions werden in-memory verwaltet (Cookie `session_token`, Ablauf über
+  `SESSION_EXPIRE_MINUTES`).
 
 ---
 
@@ -181,6 +216,9 @@ restic stats
 | `keep-monthly 12` | Letzte 12 Monate, je 1 Snapshot/Monat |
 | `keep-yearly 2` | Letzte 2 Jahre, je 1 Snapshot/Jahr |
 
+Wird nach jedem erfolgreichen Backup automatisch angewendet (`forget --prune`), konfigurierbar
+über `KEEP_DAILY` / `KEEP_WEEKLY` / `KEEP_MONTHLY` / `KEEP_YEARLY` in der jeweiligen `.cfg`.
+
 ---
 
 ## Disaster Recovery
@@ -204,7 +242,24 @@ restic stats
 
 ## Logs
 
+Standardmäßig schreiben die Skripte und die WebUI nach `/var/log/` (Pfad je `LOG_FILE` in der
+jeweiligen `.cfg` konfigurierbar):
+
 ```
 /var/log/samba-backup.log
 /var/log/opnsense-backup.log
+/var/log/restic-webui.log
 ```
+
+---
+
+## Konfigurationsdateien (Übersicht)
+
+| Datei | Verwendet von | Zweck |
+|---|---|---|
+| `config/samba.cfg` | `scripts/samba-backup.py` | Restic-Repo, Samba-Host/Pfade, Mail, Retention |
+| `config/firewalls.cfg` | `scripts/firewalls-backup.py` | Restic-Repo, OPNsense-API-Zugangsdaten je Firewall, Mail, Retention |
+| `config/webui.cfg` | `webui/main.py` | Restic-Repositories für die WebUI, AD/LDAP-Auth, Session |
+
+Alle drei Dateien enthalten Zugangsdaten und liegen **nicht** im Git-Repo (siehe `.gitignore`) –
+nur die zugehörigen `*.cfg.example`-Vorlagen sind versioniert.
