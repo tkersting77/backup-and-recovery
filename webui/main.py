@@ -298,13 +298,24 @@ async def list_files(
     password_file = get_password_file(repo)
     raw = run_restic(repo_path, password_file, ["ls", snapshot_id, path])
 
+    norm_path = path.rstrip("/") or "/"
+
     entries = []
     for line in raw.splitlines():
         try:
             entry = json.loads(line)
-            entries.append(entry)
         except json.JSONDecodeError:
             continue
+
+        # Metadaten-Zeile und den abgefragten Ordner selbst ausfiltern –
+        # restic ls gibt sonst das Verzeichnis als eigenen Eintrag mit zurueck
+        if entry.get("struct_type") == "snapshot":
+            continue
+        entry_path = entry.get("path", "").rstrip("/") or "/"
+        if entry_path == norm_path:
+            continue
+
+        entries.append(entry)
 
     return {"snapshot": snapshot_id, "path": path, "entries": entries}
 
