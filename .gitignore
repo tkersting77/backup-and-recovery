@@ -6,6 +6,11 @@ repositories/*
 tmp/firewalls/*
 !tmp/firewalls/.gitkeep
 
+# Samba-Staging (rsync-Spiegel der Freigaben, temporaer) + Lockfile
+tmp/samba/*
+!tmp/samba/.gitkeep
+tmp/samba-backup.lock
+
 # Konfigurationsdateien mit echten Zugangsdaten – niemals ins Repo!
 *.cfg
 *.env

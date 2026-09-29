@@ -11,7 +11,7 @@ Betrieben auf einem Debian-LXC-Container auf Proxmox, verbunden per OpenVPN.
 ```
 backup-and-recovery/
 ├── scripts/
-│   ├── samba-backup.py         Samba-Freigaben per Restic Pull via SFTP
+│   ├── samba-backup.py         Samba-Freigaben per rsync/SSH spiegeln + Restic sichern
 │   └── firewalls-backup.py     OPNsense-Configs per API + Restic
 ├── webui/
 │   ├── main.py                 FastAPI Backend (LDAP/AD-Auth + Restic-CLI-Wrapper)
@@ -26,6 +26,7 @@ backup-and-recovery/
 ├── log/                        Log-Verzeichnis (Platzhalter, .gitkeep)
 ├── repositories/                Lokale Restic-Repositories (Platzhalter, .gitkeep)
 ├── tmp/firewalls/                Staging fuer heruntergeladene OPNsense-Configs (vor dem Restic-Backup)
+├── tmp/samba/                    rsync-Spiegel der Samba-Freigaben (vor dem Restic-Backup)
 ├── requirements.txt             Python-Abhängigkeiten für Backup-Skripte + WebUI
 ├── README.md
 └── .gitignore
@@ -49,7 +50,18 @@ apt update && apt install -y restic
 restic self-update
 ```
 
-### 3. Restic Repositories initialisieren
+### 3. rsync/SSH für den Samba-Pull einrichten
+
+```bash
+apt install -y rsync openssh-client
+ssh-keygen -t ed25519 -f /etc/restic/samba_id_ed25519 -N ""
+# Public Key (/etc/restic/samba_id_ed25519.pub) auf dem Samba-Server für
+# den SSH-User aus SAMBA_HOST in ~/.ssh/authorized_keys eintragen
+```
+
+Der Key-Pfad kommt später als `SSH_KEY_FILE` in `config/samba.cfg` (siehe Schritt 5).
+
+### 4. Restic Repositories initialisieren
 
 Ein Repository für die Samba-Daten, eines für die Firewall-Configs:
 
@@ -65,7 +77,7 @@ echo "dein-passwort" > /etc/restic/password.txt
 chmod 600 /etc/restic/password.txt
 ```
 
-### 4. Konfigurationsdateien anlegen
+### 5. Konfigurationsdateien anlegen
 
 ```bash
 cp config/samba.cfg.example config/samba.cfg
@@ -80,7 +92,16 @@ nano config/webui.cfg
 Für `firewalls.cfg` gilt: Firewalls werden anhand aller `FRW_<NAME>_IP`-Einträge automatisch erkannt –
 für eine weitere Firewall einfach einen zusätzlichen `FRW_<NAME>_IP/_KEY/_SECRET`-Block hinzufügen.
 
-### 5. Python-Abhängigkeiten installieren
+Für `samba.cfg` gilt: beliebig viele Samba-Server werden anhand aller `SRV_<NAME>_HOST`-Einträge
+automatisch erkannt – für einen weiteren Server einfach einen zusätzlichen
+`SRV_<NAME>_HOST`/`_PATHS`-Block hinzufügen (optional mit eigenem `_SSH_KEY_FILE`/`_SSH_PORT`,
+sonst gelten die globalen `SSH_KEY_FILE`/`SSH_PORT`-Defaults). `<NAME>` wird 1:1 als restic
+`--host` verwendet – jeder Server bekommt dadurch eigene Snapshots und eigene, unabhängige
+Retention. `SRV_<NAME>_PATHS` sind kommagetrennte Pfade auf dem jeweiligen Server – jeder wird
+per rsync 1:1 (inkl. gelöschter Dateien, Zeitstempel, Rechte) nach `tmp/samba/<NAME>/<basename>/`
+gespiegelt, bevor restic den Stand dieses Servers sichert.
+
+### 6. Python-Abhängigkeiten installieren
 
 ```bash
 pip install -r requirements.txt --break-system-packages
@@ -88,7 +109,7 @@ pip install -r requirements.txt --break-system-packages
 
 (Deckt sowohl die Backup-Skripte als auch die WebUI ab: FastAPI, Uvicorn, Jinja2, ldap3, requests, urllib3.)
 
-### 6. Systemd Timer aktivieren
+### 7. Systemd Timer aktivieren
 
 ```bash
 cp systemd/*.service systemd/*.timer /etc/systemd/system/
@@ -100,7 +121,7 @@ systemctl enable --now opnsense-backup.timer
 > ⚠️ Vor dem Aktivieren prüfen, ob `ExecStart` in den `.service`-Dateien exakt auf die
 > tatsächlichen Skriptnamen in `scripts/` zeigt (`samba-backup.py`, `firewalls-backup.py`).
 
-### 7. WebUI starten (optional)
+### 8. WebUI starten (optional)
 
 ```bash
 cp systemd/restic-webui.service /etc/systemd/system/

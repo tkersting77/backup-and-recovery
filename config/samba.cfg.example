@@ -1,33 +1,45 @@
-# /config/opnsense.cfg
-# Konfiguration fuer opnsense_backup.py
+# /config/samba.cfg
+# Konfiguration fuer samba-backup.py
 # Diese Datei bleibt auf dem Server – NICHT ins Git-Repo committen!
-# opnsense.cfg.example dient als Vorlage und IST im Git-Repo.
+# samba.cfg.example dient als Vorlage und IST im Git-Repo.
 
-# Restic Repository
+# Restic Repository (EIN gemeinsames Repository fuer alle Samba-Server;
+# jeder Server bekommt darin eigene Snapshots ueber --host)
 RESTIC_REPO=/backup/files/restic/firma
 RESTIC_PASSWORD_FILE=/etc/restic/password.txt
+RESTIC_TAG=samba
 
-# Firewalls: Name -> Zugangsdaten
-# Format: FW_<NAME>_IP, FW_<NAME>_KEY, FW_<NAME>_SECRET
-# Namen muessen mit der FIREWALLS-Liste in opnsense_backup.py uebereinstimmen
-FW_01_IP=10.0.1.1
-FW_01_KEY=api-key-hier
-FW_01_SECRET=api-secret-hier
+# Standard-SSH-Zugang, gilt fuer alle Server, sofern nicht pro Server per
+# SRV_<NAME>_SSH_KEY_FILE / SRV_<NAME>_SSH_PORT ueberschrieben
+SSH_KEY_FILE=/etc/restic/samba_id_ed25519
+SSH_PORT=22
 
-FW_02_IP=10.0.2.1
-FW_02_KEY=api-key-hier
-FW_02_SECRET=api-secret-hier
+# Samba-Server: Name -> SSH-Host + zu sichernde Pfade
+# Format: SRV_<NAME>_HOST, SRV_<NAME>_PATHS (kommagetrennt),
+#         optional SRV_<NAME>_SSH_KEY_FILE, SRV_<NAME>_SSH_PORT, SRV_<NAME>_SITE
+# Namen werden automatisch aus den SRV_*_HOST Eintraegen ermittelt -
+# einfach weitere Bloecke hinzufuegen fuer neue Server. <NAME> wird 1:1
+# als restic --host fuer die Snapshots dieses Servers verwendet, dadurch
+# hat jeder Server eigene Snapshots und eigene (unabhaengige) Retention.
+# Jeder Pfad wird 1:1 per rsync (inkl. geloeschter Dateien, Zeitstempel,
+# Rechte, Eigentuemer) nach tmp/samba/<NAME>/<basename>/ gespiegelt, bevor
+# restic den Stand dieses Servers sichert.
+# SRV_<NAME>_SITE ist optional und wird als zusaetzlicher restic --tag
+# gesetzt - erlaubt z.B. "restic snapshots --tag gs10", um alle Backups
+# (auch die der Firewalls, sofern dort genauso getaggt) eines Standorts
+# uebergreifend zu sehen, unabhaengig vom einzelnen --host.
+SRV_srv-gs10-01_HOST=samba-user@10.8.1.11
+SRV_srv-gs10-01_PATHS=/srv/samba/users,/srv/samba/groups
+SRV_srv-gs10-01_SITE=gs10
 
-FW_03_IP=10.0.3.1
-FW_03_KEY=api-key-hier
-FW_03_SECRET=api-secret-hier
-
-# Restic Labels
-RESTIC_HOST_LABEL=firma-opnsense
-RESTIC_TAG=opnsense
+SRV_srv-gs10-10_HOST=samba-user@10.8.1.20
+SRV_srv-gs10-10_PATHS=/srv/samba/users,/srv/samba/groups,/srv/samba/scans
+SRV_srv-gs10-10_SSH_PORT=2222
+SRV_srv-gs10-10_SSH_KEY_FILE=/etc/restic/samba_gs10-10_id_ed25519
+SRV_srv-gs10-10_SITE=gs10
 
 # Logging
-LOG_FILE=/var/log/opnsense-backup.log
+LOG_FILE=/var/log/samba-backup.log
 
 # Mail-Benachrichtigung
 NOTIFY_MAIL_TO=admin@firma.de
@@ -35,15 +47,14 @@ NOTIFY_MAIL_FROM=backup@firma.de
 SMTP_HOST=localhost
 
 # Retention Policy
-# Nach jedem erfolgreichen Backup per "restic forget --prune" angewendet.
-# Restic behaelt pro Zeit-Bucket jeweils den neuesten Snapshot, alles andere
-# wird geloescht:
+# Wird nach jedem erfolgreichen Server-Backup EINZELN per
+# "restic forget --host <server> --tag samba --prune" angewendet. Da jeder
+# Server einen eigenen --host hat, laufen die Zeit-Buckets pro Server
+# unabhaengig voneinander (kein Server "verbraucht" die Slots eines anderen):
 #   KEEP_DAILY=7    -> von den letzten 7 Tagen je 1 Snapshot/Tag
 #   KEEP_WEEKLY=4   -> danach von den letzten 4 Wochen je 1 Snapshot/Woche
 #   KEEP_MONTHLY=12 -> danach von den letzten 12 Monaten je 1 Snapshot/Monat
 #   KEEP_YEARLY=2   -> danach von den letzten 2 Jahren je 1 Snapshot/Jahr
-# Die Buckets ueberlappen sich nicht (kein Snapshot zaehlt doppelt), gelten
-# nur fuer Snapshots mit RESTIC_TAG dieser Datei.
 KEEP_DAILY=7
 KEEP_WEEKLY=4
 KEEP_MONTHLY=12
