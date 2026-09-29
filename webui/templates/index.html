@@ -18,6 +18,8 @@
       --muted:     #7a7f96;
       --success:   #4caf82;
       --error:     #e05c5c;
+      --warning:   #e0a83c;
+      --purple:    #a78bfa;
       --warn:      #e0a05c;
       --font:      'Inter', system-ui, sans-serif;
       --mono:      'JetBrains Mono', 'Fira Code', monospace;
@@ -98,6 +100,25 @@
       margin-bottom: .6rem;
     }
 
+    .sidebar-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1rem;
+      margin-top: .4rem;
+    }
+    .sidebar-label-row .sidebar-label { margin-bottom: 0; }
+    .btn-clear {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: .72rem;
+      cursor: pointer;
+      padding: 0;
+      font-family: inherit;
+    }
+    .btn-clear:hover { text-decoration: underline; }
+
     select, input[type="text"] {
       width: 100%;
       background: var(--bg);
@@ -145,6 +166,20 @@
       margin-top: 3px;
     }
 
+    .snap-bucket {
+      display: inline-block;
+      font-size: .65rem;
+      font-weight: 600;
+      border-radius: 3px;
+      padding: 1px 6px;
+      margin-top: 3px;
+      margin-right: 4px;
+    }
+    .snap-bucket.daily   { background: rgba(79,142,247,.15);  color: var(--accent);  }
+    .snap-bucket.weekly  { background: rgba(76,175,130,.15);  color: var(--success); }
+    .snap-bucket.monthly { background: rgba(224,168,60,.15);  color: var(--warning); }
+    .snap-bucket.yearly  { background: rgba(167,139,250,.15); color: var(--purple);  }
+
     /* ── Content ── */
     .content {
       display: flex;
@@ -181,19 +216,39 @@
     .tab-content.active { display: block; }
 
     /* File Browser */
+    .browser-toolbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
     .breadcrumb {
       display: flex;
       align-items: center;
       gap: .3rem;
       font-size: .82rem;
       color: var(--muted);
-      margin-bottom: 1rem;
       flex-wrap: wrap;
+      flex: 1;
     }
 
     .breadcrumb span { cursor: pointer; color: var(--accent); }
     .breadcrumb span:hover { text-decoration: underline; }
     .breadcrumb .sep { color: var(--border); }
+
+    .overlay-toggle {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      font-size: .8rem;
+      color: var(--muted);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .overlay-toggle input[type="checkbox"] { width: auto; cursor: pointer; }
 
     .file-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
     .file-table th {
@@ -210,6 +265,18 @@
       vertical-align: middle;
     }
     .file-table tr:hover td { background: var(--surface2); }
+    .file-table tr.row-extra td { opacity: .75; }
+
+    .extra-badge {
+      display: inline-block;
+      font-size: .62rem;
+      font-weight: 600;
+      background: rgba(224,168,60,.15);
+      color: var(--warning);
+      border-radius: 3px;
+      padding: 1px 6px;
+      margin-left: .5rem;
+    }
 
     .file-icon { margin-right: .4rem; }
     .file-name { cursor: pointer; color: var(--text); }
@@ -234,11 +301,26 @@
     /* Search */
     .search-bar {
       display: flex;
+      flex-wrap: wrap;
+      align-items: center;
       gap: .6rem;
       margin-bottom: 1.2rem;
     }
 
-    .search-bar input { flex: 1; }
+    .search-bar input[type="text"] { flex: 1; min-width: 160px; }
+
+    .search-scope {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      font-size: .8rem;
+      color: var(--muted);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .search-scope input[type="checkbox"] { width: auto; cursor: pointer; }
+    .search-scope input[type="checkbox"]:disabled,
+    .search-scope input[type="checkbox"]:disabled + * { cursor: not-allowed; }
 
     .btn-primary {
       background: var(--accent);
@@ -351,6 +433,10 @@
       </select>
     </div>
 
+    <div class="sidebar-label-row">
+      <div class="sidebar-label">Snapshots</div>
+      <button id="clearSnapshotBtn" class="btn-clear" onclick="clearSnapshotSelection()" hidden>Auswahl aufheben</button>
+    </div>
     <div id="snapshotList" class="snapshot-list">
       <div class="loading">Lade Snapshots…</div>
     </div>
@@ -367,7 +453,13 @@
     <div id="tab-browser" class="tab-content active">
       <div id="browserEmpty" class="empty">Snapshot aus der linken Liste auswählen</div>
       <div id="browserContent" style="display:none">
-        <div id="breadcrumb" class="breadcrumb"></div>
+        <div class="browser-toolbar">
+          <div id="breadcrumb" class="breadcrumb"></div>
+          <label class="overlay-toggle">
+            <input type="checkbox" id="overlayToggle" onchange="onOverlayToggle()" disabled>
+            Auch neuere Dateien anzeigen (Stand: neuester Snapshot)
+          </label>
+        </div>
         <table class="file-table">
           <thead>
             <tr>
@@ -387,6 +479,10 @@
       <div class="search-bar">
         <input type="text" id="searchInput" placeholder="Dateiname oder Muster, z.B. rechnung*.pdf"
                onkeydown="if(event.key==='Enter') doSearch()">
+        <label class="search-scope">
+          <input type="checkbox" id="searchScopeCurrent" disabled>
+          Nur im ausgewählten Snapshot suchen
+        </label>
         <button class="btn-primary" onclick="doSearch()">Suchen</button>
       </div>
       <div id="searchResults"></div>
@@ -395,10 +491,12 @@
 </div>
 
 <script>
-  let currentRepo     = document.getElementById('repoSelect').value;
-  let currentSnapshot = null;
-  let currentPath     = '/';
-  let pathHistory     = ['/'];
+  let currentRepo      = document.getElementById('repoSelect').value;
+  let currentSnapshot  = null;
+  let currentPath      = '/';
+  let pathHistory      = ['/'];
+  let latestSnapshotId = null;
+  let overlayLatest    = false;
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
 
@@ -411,6 +509,35 @@
 
   // ── Snapshots ─────────────────────────────────────────────────────────────
 
+  // Ordnet jedem Snapshot anhand des zeitlichen Abstands zum vorherigen (aelteren)
+  // Snapshot eine Retention-Stufe zu (taeglich/woechentlich/monatlich/jaehrlich).
+  // Das ist eine Naeherung auf Basis der tatsaechlich noch vorhandenen Snapshots
+  // (nicht der konfigurierten KEEP_*-Werte): je laenger ein Snapshot nach einer
+  // "forget --prune"-Bereinigung ueberlebt, desto groesser wird der Abstand zu
+  // seinem Vorgaenger, und genau das spiegelt sich in dieser Einordnung wider.
+  function classifySnapshots(snaps) {
+    const DAY = 24 * 60 * 60 * 1000;
+    const BUCKETS = [
+      { max: 2,  cls: 'daily',   label: 'täglich'      },
+      { max: 12, cls: 'weekly',  label: 'wöchentlich'  },
+      { max: 50, cls: 'monthly', label: 'monatlich'    },
+      { max: Infinity, cls: 'yearly', label: 'jährlich' },
+    ];
+    const bucketFor = (gapDays) => BUCKETS.find(b => gapDays < b.max);
+
+    const sorted = snaps.slice().sort((a, b) => new Date(a.time) - new Date(b.time));
+    return sorted.map((s, i) => {
+      let gapMs = null;
+      if (i > 0) {
+        gapMs = new Date(s.time) - new Date(sorted[i - 1].time);
+      } else if (sorted.length > 1) {
+        gapMs = new Date(sorted[1].time) - new Date(s.time);
+      }
+      const bucket = gapMs !== null ? bucketFor(gapMs / DAY) : null;
+      return { ...s, _bucket: bucket };
+    });
+  }
+
   async function loadSnapshots() {
     currentRepo = document.getElementById('repoSelect').value;
     const tag   = document.getElementById('tagFilter').value;
@@ -418,6 +545,8 @@
 
     list.innerHTML = '<div class="loading">Lade…</div>';
     currentSnapshot = null;
+    latestSnapshotId = null;
+    setSnapshotControls(false);
     resetBrowser();
 
     try {
@@ -431,18 +560,21 @@
         return;
       }
 
-      // Neueste zuerst
-      const snaps = data.snapshots.slice().reverse();
+      // Neueste zuerst, mit Retention-Einordnung (taeglich/woechentlich/...)
+      const classified = classifySnapshots(data.snapshots);
+      latestSnapshotId = classified[classified.length - 1].short_id;
+      const snaps = classified.slice().reverse();
       list.innerHTML = snaps.map(s => {
-        const d    = new Date(s.time);
-        const date = d.toLocaleDateString('de-DE', {day:'2-digit',month:'2-digit',year:'numeric'});
-        const time = d.toLocaleTimeString('de-DE', {hour:'2-digit',minute:'2-digit'});
-        const tags = (s.tags || []).map(t => `<span class="snap-tag">${t}</span>`).join(' ');
+        const d      = new Date(s.time);
+        const date   = d.toLocaleDateString('de-DE', {day:'2-digit',month:'2-digit',year:'numeric'});
+        const time   = d.toLocaleTimeString('de-DE', {hour:'2-digit',minute:'2-digit'});
+        const tags   = (s.tags || []).map(t => `<span class="snap-tag">${t}</span>`).join(' ');
+        const bucket = s._bucket ? `<span class="snap-bucket ${s._bucket.cls}">${s._bucket.label}</span>` : '';
         return `
           <div class="snapshot-item" onclick="selectSnapshot('${s.short_id}', this)">
             <div class="snap-date">${date} ${time}</div>
             <div class="snap-id">${s.short_id}</div>
-            <div>${tags}</div>
+            <div>${bucket}${tags}</div>
           </div>`;
       }).join('');
     } catch(e) {
@@ -451,15 +583,48 @@
   }
 
   function selectSnapshot(id, el) {
+    // Erneuter Klick auf den bereits ausgewählten Snapshot hebt die Auswahl auf
+    if (el.classList.contains('active')) {
+      clearSnapshotSelection();
+      return;
+    }
+
     document.querySelectorAll('.snapshot-item').forEach(i => i.classList.remove('active'));
     el.classList.add('active');
     currentSnapshot = id;
     currentPath = '/';
     pathHistory = ['/'];
+    setSnapshotControls(true);
 
     // Zum Browser-Tab wechseln
     document.querySelectorAll('.tab')[0].click();
     loadFiles('/');
+  }
+
+  function clearSnapshotSelection() {
+    document.querySelectorAll('.snapshot-item').forEach(i => i.classList.remove('active'));
+    currentSnapshot = null;
+    setSnapshotControls(false);
+    resetBrowser();
+  }
+
+  function setSnapshotControls(selected) {
+    document.getElementById('clearSnapshotBtn').hidden = !selected;
+    const scopeCb = document.getElementById('searchScopeCurrent');
+    scopeCb.disabled = !selected;
+    if (!selected) scopeCb.checked = false;
+
+    const overlayCb = document.getElementById('overlayToggle');
+    overlayCb.disabled = !selected;
+    if (!selected) {
+      overlayCb.checked = false;
+      overlayLatest = false;
+    }
+  }
+
+  function onOverlayToggle() {
+    overlayLatest = document.getElementById('overlayToggle').checked;
+    if (currentSnapshot) loadFiles(currentPath);
   }
 
   // ── File Browser ──────────────────────────────────────────────────────────
@@ -485,7 +650,27 @@
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
 
-      const entries = data.entries.filter(e => e.struct_type === 'node');
+      let entries = data.entries
+        .filter(e => e.struct_type === 'node')
+        .map(e => ({ ...e, _snapshot: currentSnapshot, _extra: false }));
+
+      // Overlay: zusaetzlich Dateien zeigen, die im neuesten Snapshot an diesem
+      // Pfad existieren, im gerade angeschauten Snapshot aber (noch) fehlten.
+      if (overlayLatest && latestSnapshotId && latestSnapshotId !== currentSnapshot) {
+        try {
+          const res2 = await fetch(`/api/${currentRepo}/ls/${latestSnapshotId}?path=${encodeURIComponent(path)}`);
+          if (res2.ok) {
+            const data2 = await res2.json();
+            const existingNames = new Set(entries.map(e => e.name));
+            const extra = data2.entries
+              .filter(e => e.struct_type === 'node' && !existingNames.has(e.name))
+              .map(e => ({ ...e, _snapshot: latestSnapshotId, _extra: true }));
+            entries = entries.concat(extra);
+          }
+        } catch (_) {
+          // Overlay ist optional – Fehler hier duerfen den normalen Browse-Flow nicht stoppen
+        }
+      }
 
       if (entries.length === 0) {
         tbody.innerHTML = '<tr><td colspan="4" class="empty">Leer</td></tr>';
@@ -507,17 +692,21 @@
         const onclick = isDir
           ? `navigateTo('${e.path}')`
           : '';
+        const extraBadge = e._extra
+          ? `<span class="extra-badge" title="Nicht Teil dieses Snapshots – Stand: ${e._snapshot}">neu · ${e._snapshot}</span>`
+          : '';
 
         return `
-          <tr>
+          <tr class="${e._extra ? 'row-extra' : ''}">
             <td>
               <span class="file-icon">${icon}</span>
               <span class="${nameCls}" onclick="${onclick}">${e.name}</span>
+              ${extraBadge}
             </td>
             <td class="file-size">${size}</td>
             <td class="file-mtime">${mtime}</td>
             <td>
-              <button class="btn-dl" onclick="downloadPath('${currentSnapshot}', '${e.path}', '${e.name}')">
+              <button class="btn-dl" onclick="downloadPath('${e._snapshot}', '${e.path}', '${e.name}')">
                 ↓ Download
               </button>
             </td>
@@ -565,7 +754,8 @@
     const results = document.getElementById('searchResults');
     results.innerHTML = '<div class="loading">Suche läuft…</div>';
 
-    const snapParam = currentSnapshot ? `&snapshot_id=${currentSnapshot}` : '';
+    const restrictToCurrent = document.getElementById('searchScopeCurrent').checked && currentSnapshot;
+    const snapParam = restrictToCurrent ? `&snapshot_id=${currentSnapshot}` : '';
     try {
       const res = await fetch(`/api/${currentRepo}/find?pattern=${encodeURIComponent(pattern)}${snapParam}`);
       if (!res.ok) throw new Error(await res.text());
