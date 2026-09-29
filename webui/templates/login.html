@@ -8,19 +8,19 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #0f1117;
-      --surface:  #1a1d27;
-      --border:   #2a2d3a;
-      --accent:   #4f8ef7;
-      --accent-h: #3a7aee;
-      --text:     #e2e4ed;
-      --muted:    #7a7f96;
-      --error:    #e05c5c;
+      --bg:       #eef2fb;
+      --surface:  #ffffff;
+      --border:   #e2e6f2;
+      --accent:   #4f7cf7;
+      --accent-h: #3d68e0;
+      --text:     #232838;
+      --muted:    #767c92;
+      --error:    #d94c56;
       --font:     'Inter', system-ui, sans-serif;
     }
 
     body {
-      background: var(--bg);
+      background: linear-gradient(160deg, #eef2fb 0%, #f7f9fd 55%, #ffffff 100%);
       color: var(--text);
       font-family: var(--font);
       min-height: 100vh;
@@ -32,7 +32,8 @@
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 14px;
+      box-shadow: 0 20px 40px -20px rgba(35, 40, 56, .18);
       padding: 2.5rem 2rem;
       width: 100%;
       max-width: 360px;
@@ -101,8 +102,8 @@
     button:hover { background: var(--accent-h); }
 
     .error {
-      background: rgba(224, 92, 92, .12);
-      border: 1px solid rgba(224, 92, 92, .3);
+      background: rgba(217, 76, 86, .08);
+      border: 1px solid rgba(217, 76, 86, .25);
       border-radius: 6px;
       color: var(--error);
       font-size: .82rem;
@@ -115,9 +116,9 @@
   <div class="card">
     <div class="logo">
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-        <rect width="28" height="28" rx="7" fill="#4f8ef7" fill-opacity=".15"/>
-        <path d="M8 20V10l6-3 6 3v10l-6 3-6-3z" stroke="#4f8ef7" stroke-width="1.5" stroke-linejoin="round"/>
-        <path d="M14 7v13M8 10l6 3 6-3" stroke="#4f8ef7" stroke-width="1.5" stroke-linejoin="round"/>
+        <rect width="28" height="28" rx="7" fill="#4f7cf7" fill-opacity=".15"/>
+        <path d="M8 20V10l6-3 6 3v10l-6 3-6-3z" stroke="#4f7cf7" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M14 7v13M8 10l6 3 6-3" stroke="#4f7cf7" stroke-width="1.5" stroke-linejoin="round"/>
       </svg>
       <div>
         <div class="logo-text">Datensicherung</div>

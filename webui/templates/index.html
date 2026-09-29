@@ -8,19 +8,18 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #0f1117;
-      --surface:   #1a1d27;
-      --surface2:  #22263a;
-      --border:    #2a2d3a;
-      --accent:    #4f8ef7;
-      --accent-h:  #3a7aee;
-      --text:      #e2e4ed;
-      --muted:     #7a7f96;
+      --bg:        #eef2fb;
+      --surface:   #ffffff;
+      --surface2:  #f3f5fa;
+      --border:    #e2e6f2;
+      --accent:    #4f7cf7;
+      --accent-h:  #3d68e0;
+      --text:      #232838;
+      --muted:     #767c92;
       --success:   #4caf82;
-      --error:     #e05c5c;
+      --error:     #d94c56;
       --warning:   #e0a83c;
       --purple:    #a78bfa;
-      --warn:      #e0a05c;
       --font:      'Inter', system-ui, sans-serif;
       --mono:      'JetBrains Mono', 'Fira Code', monospace;
     }
@@ -38,6 +37,7 @@
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgba(35, 40, 56, .05);
       display: flex;
       align-items: center;
       gap: 1rem;
@@ -150,8 +150,8 @@
 
     .snapshot-item:hover { background: var(--surface2); }
     .snapshot-item.active {
-      background: rgba(79, 142, 247, .1);
-      border-color: rgba(79, 142, 247, .25);
+      background: rgba(79, 124, 247, .1);
+      border-color: rgba(79, 124, 247, .25);
     }
 
     .snap-date { font-weight: 500; color: var(--text); }
@@ -159,7 +159,7 @@
     .snap-tag  {
       display: inline-block;
       font-size: .65rem;
-      background: rgba(79,142,247,.15);
+      background: rgba(79,124,247,.15);
       color: var(--accent);
       border-radius: 3px;
       padding: 1px 5px;
@@ -175,7 +175,7 @@
       margin-top: 3px;
       margin-right: 4px;
     }
-    .snap-bucket.daily   { background: rgba(79,142,247,.15);  color: var(--accent);  }
+    .snap-bucket.daily   { background: rgba(79,124,247,.15);  color: var(--accent);  }
     .snap-bucket.weekly  { background: rgba(76,175,130,.15);  color: var(--success); }
     .snap-bucket.monthly { background: rgba(224,168,60,.15);  color: var(--warning); }
     .snap-bucket.yearly  { background: rgba(167,139,250,.15); color: var(--purple);  }
@@ -261,7 +261,7 @@
     }
     .file-table td {
       padding: .5rem .6rem;
-      border-bottom: 1px solid rgba(42,45,58,.5);
+      border-bottom: 1px solid var(--border);
       vertical-align: middle;
     }
     .file-table tr:hover td { background: var(--surface2); }
@@ -286,8 +286,8 @@
     .file-mtime { color: var(--muted); font-size: .78rem; }
 
     .btn-dl {
-      background: rgba(79,142,247,.12);
-      border: 1px solid rgba(79,142,247,.25);
+      background: rgba(79,124,247,.12);
+      border: 1px solid rgba(79,124,247,.25);
       color: var(--accent);
       border-radius: 4px;
       padding: .25rem .6rem;
@@ -296,7 +296,7 @@
       font-family: inherit;
       transition: background .15s;
     }
-    .btn-dl:hover { background: rgba(79,142,247,.22); }
+    .btn-dl:hover { background: rgba(79,124,247,.22); }
 
     /* Search */
     .search-bar {
@@ -378,8 +378,8 @@
     }
 
     .msg-error {
-      background: rgba(224,92,92,.1);
-      border: 1px solid rgba(224,92,92,.25);
+      background: rgba(217,76,86,.08);
+      border: 1px solid rgba(217,76,86,.25);
       border-radius: 6px;
       color: var(--error);
       padding: .7rem 1rem;
@@ -397,9 +397,9 @@
 <header>
   <div class="logo">
     <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
-      <rect width="28" height="28" rx="7" fill="#4f8ef7" fill-opacity=".15"/>
-      <path d="M8 20V10l6-3 6 3v10l-6 3-6-3z" stroke="#4f8ef7" stroke-width="1.5" stroke-linejoin="round"/>
-      <path d="M14 7v13M8 10l6 3 6-3" stroke="#4f8ef7" stroke-width="1.5" stroke-linejoin="round"/>
+      <rect width="28" height="28" rx="7" fill="#4f7cf7" fill-opacity=".15"/>
+      <path d="M8 20V10l6-3 6 3v10l-6 3-6-3z" stroke="#4f7cf7" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M14 7v13M8 10l6 3 6-3" stroke="#4f7cf7" stroke-width="1.5" stroke-linejoin="round"/>
     </svg>
     Datensicherung
   </div>
