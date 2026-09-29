@@ -101,7 +101,35 @@ Retention. `SRV_<NAME>_PATHS` sind kommagetrennte Pfade auf dem jeweiligen Serve
 per rsync 1:1 (inkl. gelöschter Dateien, Zeitstempel, Rechte) nach `tmp/samba/<NAME>/<basename>/`
 gespiegelt, bevor restic den Stand dieses Servers sichert.
 
-### 6. Python-Abhängigkeiten installieren
+### 6. Initialen Samba-Sync durchführen (empfohlen bei großen Freigaben)
+
+Der allererste rsync-Durchlauf kann je nach Datenmenge mehrere Tage dauern. Damit der reguläre
+`samba-backup.py`-Lauf (per Timer) dabei nicht im Weg steht bzw. keine Chance hat fertig zu
+werden, vorher einmalig mit `scripts/samba-initial-sync.sh` vorsynchronisieren – das macht nur
+den rsync-Teil (kein restic, kein Lockfile) und zeigt den Fortschritt live an, statt ihn wie
+`samba-backup.py` erst am Ende gepuffert auszugeben.
+
+```bash
+# Erst anschauen, welche Befehle laufen wuerden (nichts wird uebertragen/angelegt):
+scripts/samba-initial-sync.sh --dry-run
+
+# Einzelnen Server pruefen:
+scripts/samba-initial-sync.sh --dry-run srv-gs10-01
+
+# Echten Lauf am besten in tmux/screen starten, da er lange dauern kann:
+tmux new -s samba-seed
+scripts/samba-initial-sync.sh
+# Strg+B, D zum Abhaengen; mit "tmux attach -t samba-seed" wieder rein
+
+# Optional nur ein Server (z.B. um Server zeitlich zu staffeln):
+scripts/samba-initial-sync.sh srv-gs10-01
+```
+
+Log landet zusätzlich unter `log/samba-initial-sync.log`. Ist der Staging-Ordner einmal
+vollständig, muss `samba-backup.py` beim ersten regulären Lauf nur noch die seitdem geänderten
+Dateien übertragen.
+
+### 7. Python-Abhängigkeiten installieren
 
 ```bash
 pip install -r requirements.txt --break-system-packages
@@ -109,7 +137,7 @@ pip install -r requirements.txt --break-system-packages
 
 (Deckt sowohl die Backup-Skripte als auch die WebUI ab: FastAPI, Uvicorn, Jinja2, ldap3, requests, urllib3.)
 
-### 7. Systemd Timer aktivieren
+### 8. Systemd Timer aktivieren
 
 ```bash
 cp systemd/*.service systemd/*.timer /etc/systemd/system/
@@ -121,7 +149,7 @@ systemctl enable --now opnsense-backup.timer
 > ⚠️ Vor dem Aktivieren prüfen, ob `ExecStart` in den `.service`-Dateien exakt auf die
 > tatsächlichen Skriptnamen in `scripts/` zeigt (`samba-backup.py`, `firewalls-backup.py`).
 
-### 8. WebUI starten (optional)
+### 9. WebUI starten (optional)
 
 ```bash
 cp systemd/restic-webui.service /etc/systemd/system/
@@ -138,14 +166,19 @@ dieses Repos zeigen (dort liegt `main.py`).
 ## Manuell ausführen
 
 ```bash
-# Samba-Backup
+# Samba-Backup (alle konfigurierten Server)
 python3 /opt/firma-backup/scripts/samba-backup.py
 
-# Samba-Backup Dry-Run (kein Snapshot, keine Mail)
+# Samba-Backup Dry-Run (kein Snapshot, keine Retention, keine Mail)
 python3 /opt/firma-backup/scripts/samba-backup.py --dry-run
 
 # OPNsense-Backup
 python3 /opt/firma-backup/scripts/firewalls-backup.py
+
+# Initialer Samba-Sync (nur rsync, kein restic – siehe Installation Schritt 6)
+scripts/samba-initial-sync.sh --dry-run          # nur Befehle anzeigen
+scripts/samba-initial-sync.sh                    # alle Server
+scripts/samba-initial-sync.sh srv-gs10-01         # nur ein Server
 ```
 
 ---

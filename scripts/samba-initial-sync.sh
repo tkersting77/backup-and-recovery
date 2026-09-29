@@ -21,8 +21,10 @@
 #   # Strg+B, D zum Abhaengen; mit "tmux attach -t samba-seed" wieder rein
 #
 # Nutzung:
-#   scripts/samba-initial-sync.sh                # alle konfigurierten Server
-#   scripts/samba-initial-sync.sh srv-gs10-01     # nur dieser Server
+#   scripts/samba-initial-sync.sh                    # alle konfigurierten Server
+#   scripts/samba-initial-sync.sh srv-gs10-01         # nur dieser Server
+#   scripts/samba-initial-sync.sh --dry-run           # nur die rsync-Befehle anzeigen,
+#   scripts/samba-initial-sync.sh --dry-run srv-gs10-01  # nichts wird uebertragen/angelegt
 
 set -uo pipefail
 
@@ -31,7 +33,19 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 CONFIG_FILE="$REPO_ROOT/config/samba.cfg"
 STAGING_DIR="$REPO_ROOT/tmp/samba"
 LOG_FILE="$REPO_ROOT/log/samba-initial-sync.log"
-ONLY_SERVER="${1:-}"
+
+DRY_RUN=0
+ONLY_SERVER=""
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run|-n)
+            DRY_RUN=1
+            ;;
+        *)
+            ONLY_SERVER="$arg"
+            ;;
+    esac
+done
 
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $*" | tee -a "$LOG_FILE"
@@ -109,14 +123,21 @@ for record in "${SERVER_RECORDS[@]}"; do
 
         base_name="$(basename "$remote_path")"
         local_target="$STAGING_DIR/$name/$base_name"
-        mkdir -p "$local_target"
 
+        rsync_cmd=(rsync -a --delete --numeric-ids --partial --progress
+            -e "$ssh_cmd"
+            "$host:${remote_path%/}/"
+            "$local_target/")
+
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+            printf -v cmd_str '%q ' "${rsync_cmd[@]}"
+            log "DRY-RUN ($name): $cmd_str"
+            continue
+        fi
+
+        mkdir -p "$local_target"
         log "=== Start $name:$remote_path -> $local_target ==="
-        rsync -a --delete --numeric-ids --partial --progress \
-            -e "$ssh_cmd" \
-            "$host:${remote_path%/}/" \
-            "$local_target/" \
-            2>&1 | tee -a "$LOG_FILE"
+        "${rsync_cmd[@]}" 2>&1 | tee -a "$LOG_FILE"
         rc=${PIPESTATUS[0]}
 
         # rc 24 = "some files vanished before transfer" - bei einer lebenden
@@ -129,4 +150,8 @@ for record in "${SERVER_RECORDS[@]}"; do
     done
 done
 
-log "Initialer Sync abgeschlossen."
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "DRY-RUN abgeschlossen – es wurde nichts uebertragen oder angelegt."
+else
+    log "Initialer Sync abgeschlossen."
+fi
