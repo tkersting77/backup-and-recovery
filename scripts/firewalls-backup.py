@@ -198,11 +198,11 @@ def backup_configs() -> bool:
         "--host", RESTIC_HOST_LABEL,
         "--tag", RESTIC_TAG,
         "--verbose",
-        CONFIG_STAGING.name,
+        ".",
     ]
-    # cwd=Staging-Elternverzeichnis, damit restic nur den Ordnernamen
-    # ("firewalls") als Wurzel im Snapshot speichert statt des vollen Pfads.
-    result = run_restic(args, cwd=CONFIG_STAGING.parent)
+    # cwd=Staging-Verzeichnis selbst, Quelle ".": damit landen die Dateien im
+    # Snapshot direkt unter "/" statt unter einem zusaetzlichen "firewalls"-Ordner.
+    result = run_restic(args, cwd=CONFIG_STAGING)
     if result.stdout:
         logger.info(result.stdout)
     if result.stderr:
