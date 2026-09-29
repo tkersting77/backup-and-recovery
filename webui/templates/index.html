@@ -517,7 +517,7 @@
             <td class="file-size">${size}</td>
             <td class="file-mtime">${mtime}</td>
             <td>
-              <button class="btn-dl" onclick="downloadPath('${e.path}', '${e.name}')">
+              <button class="btn-dl" onclick="downloadPath('${currentSnapshot}', '${e.path}', '${e.name}')">
                 ↓ Download
               </button>
             </td>
@@ -577,14 +577,15 @@
       }
 
       results.innerHTML = data.results.map(r => {
+        const snapId = r.short || r.snapshot || '';
         const hits = (r.matches || [r]).map(m => `
           <div class="result-item">
             <span>${m.type === 'dir' ? '📁' : '📄'}</span>
             <div>
               <div class="result-path">${m.path}</div>
-              <div class="result-snap">Snapshot: ${r.short || r.snapshot || '—'}</div>
+              <div class="result-snap">Snapshot: ${snapId || '—'}</div>
             </div>
-            <button class="btn-dl" onclick="downloadPath('${m.path}', '${m.path.split('/').pop()}')">
+            <button class="btn-dl" onclick="downloadPath('${snapId}', '${m.path}', '${m.path.split('/').pop()}')">
               ↓ Download
             </button>
           </div>`).join('');
@@ -597,12 +598,12 @@
 
   // ── Download ──────────────────────────────────────────────────────────────
 
-  function downloadPath(path, name) {
-    if (!currentSnapshot) {
-      alert('Bitte zuerst einen Snapshot auswählen.');
+  function downloadPath(snapshotId, path, name) {
+    if (!snapshotId) {
+      alert('Snapshot für diese Datei nicht ermittelbar.');
       return;
     }
-    const url = `/api/${currentRepo}/download/${currentSnapshot}?path=${encodeURIComponent(path)}`;
+    const url = `/api/${currentRepo}/download/${snapshotId}?path=${encodeURIComponent(path)}`;
     const a   = document.createElement('a');
     a.href    = url;
     a.download = name + '.zip';
