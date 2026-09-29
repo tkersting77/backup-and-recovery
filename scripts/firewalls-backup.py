@@ -198,6 +198,7 @@ def backup_configs() -> bool:
         "--host", RESTIC_HOST_LABEL,
         "--tag", RESTIC_TAG,
         "--verbose",
+        "--exclude", ".gitkeep",
         ".",
     ]
     # cwd=Staging-Verzeichnis selbst, Quelle ".": damit landen die Dateien im
