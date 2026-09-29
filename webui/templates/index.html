@@ -239,7 +239,7 @@
     .breadcrumb span:hover { text-decoration: underline; }
     .breadcrumb .sep { color: var(--border); }
 
-    .overlay-toggle {
+    .show-all-toggle {
       display: flex;
       align-items: center;
       gap: .4rem;
@@ -248,7 +248,7 @@
       white-space: nowrap;
       cursor: pointer;
     }
-    .overlay-toggle input[type="checkbox"] { width: auto; cursor: pointer; }
+    .show-all-toggle input[type="checkbox"] { width: auto; cursor: pointer; }
 
     .file-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
     .file-table th {
@@ -265,18 +265,18 @@
       vertical-align: middle;
     }
     .file-table tr:hover td { background: var(--surface2); }
-    .file-table tr.row-extra td { opacity: .75; }
+    .file-table tr.row-unchanged td { opacity: .6; }
 
-    .extra-badge {
+    .changed-badge {
       display: inline-block;
       font-size: .62rem;
       font-weight: 600;
-      background: rgba(224,168,60,.15);
-      color: var(--warning);
       border-radius: 3px;
       padding: 1px 6px;
       margin-left: .5rem;
     }
+    .changed-badge.new      { background: rgba(76,175,130,.15);  color: var(--success); }
+    .changed-badge.modified { background: rgba(224,168,60,.15);  color: var(--warning); }
 
     .file-icon { margin-right: .4rem; }
     .file-name { cursor: pointer; color: var(--text); }
@@ -455,9 +455,9 @@
       <div id="browserContent" style="display:none">
         <div class="browser-toolbar">
           <div id="breadcrumb" class="breadcrumb"></div>
-          <label class="overlay-toggle">
-            <input type="checkbox" id="overlayToggle" onchange="onOverlayToggle()" disabled>
-            Auch neuere Dateien anzeigen (Stand: neuester Snapshot)
+          <label class="show-all-toggle">
+            <input type="checkbox" id="showAllToggle" onchange="onShowAllToggle()" disabled>
+            Alle Dateien anzeigen (nicht nur geänderte)
           </label>
         </div>
         <table class="file-table">
@@ -495,8 +495,14 @@
   let currentSnapshot  = null;
   let currentPath      = '/';
   let pathHistory      = ['/'];
-  let latestSnapshotId = null;
-  let overlayLatest    = false;
+  let snapshotsAsc     = [];    // alle Snapshots des Repos, aeltester zuerst
+  let showAllFiles     = false; // false = nur geaenderte Dateien ggue. Vorgaenger-Snapshot
+
+  function getPreviousSnapshotId(id) {
+    const idx = snapshotsAsc.findIndex(s => s.short_id === id);
+    if (idx <= 0) return null;
+    return snapshotsAsc[idx - 1].short_id;
+  }
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
 
@@ -545,7 +551,7 @@
 
     list.innerHTML = '<div class="loading">Lade…</div>';
     currentSnapshot = null;
-    latestSnapshotId = null;
+    snapshotsAsc = [];
     setSnapshotControls(false);
     resetBrowser();
 
@@ -562,7 +568,7 @@
 
       // Neueste zuerst, mit Retention-Einordnung (taeglich/woechentlich/...)
       const classified = classifySnapshots(data.snapshots);
-      latestSnapshotId = classified[classified.length - 1].short_id;
+      snapshotsAsc = classified;
       const snaps = classified.slice().reverse();
       list.innerHTML = snaps.map(s => {
         const d      = new Date(s.time);
@@ -614,20 +620,43 @@
     scopeCb.disabled = !selected;
     if (!selected) scopeCb.checked = false;
 
-    const overlayCb = document.getElementById('overlayToggle');
-    overlayCb.disabled = !selected;
+    const showAllCb = document.getElementById('showAllToggle');
+    showAllCb.disabled = !selected;
     if (!selected) {
-      overlayCb.checked = false;
-      overlayLatest = false;
+      showAllCb.checked = false;
+      showAllFiles = false;
     }
   }
 
-  function onOverlayToggle() {
-    overlayLatest = document.getElementById('overlayToggle').checked;
+  function onShowAllToggle() {
+    showAllFiles = document.getElementById('showAllToggle').checked;
     if (currentSnapshot) loadFiles(currentPath);
   }
 
   // ── File Browser ──────────────────────────────────────────────────────────
+
+  // Eindeutige Signatur einer Datei zum Vergleich zwischen zwei Snapshots.
+  // "content" sind die Blob-Hashes von restic – identisch nur bei gleichem Inhalt.
+  function fileSignature(e) {
+    if (e.content && e.content.length) return e.content.join(',');
+    return `${e.size ?? ''}:${e.mtime ?? ''}`;
+  }
+
+  // Markiert jede Datei als 'new' (nicht im Vorgaenger-Snapshot vorhanden),
+  // 'modified' (vorhanden, aber Inhalt/Groesse/mtime unterschiedlich) oder
+  // 'unchanged'. Verzeichnisse bekommen keinen Status (immer sichtbar/navigierbar).
+  function computeChangeStatus(currentEntries, prevEntries) {
+    const prevByName = new Map(prevEntries.map(e => [e.name, e]));
+    return currentEntries.map(e => {
+      if (e.type === 'dir') return { ...e, _status: null };
+      const prev = prevByName.get(e.name);
+      let status;
+      if (!prev || prev.type !== 'file') status = 'new';
+      else if (fileSignature(prev) !== fileSignature(e)) status = 'modified';
+      else status = 'unchanged';
+      return { ...e, _status: status };
+    });
+  }
 
   function resetBrowser() {
     document.getElementById('browserEmpty').style.display = 'block';
@@ -649,31 +678,34 @@
       const res = await fetch(`/api/${currentRepo}/ls/${currentSnapshot}?path=${encodeURIComponent(path)}`);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
+      const rawEntries = data.entries.filter(e => e.struct_type === 'node');
 
-      let entries = data.entries
-        .filter(e => e.struct_type === 'node')
-        .map(e => ({ ...e, _snapshot: currentSnapshot, _extra: false }));
-
-      // Overlay: zusaetzlich Dateien zeigen, die im neuesten Snapshot an diesem
-      // Pfad existieren, im gerade angeschauten Snapshot aber (noch) fehlten.
-      if (overlayLatest && latestSnapshotId && latestSnapshotId !== currentSnapshot) {
+      // Diff-Basis: der zeitlich vorherige Snapshot. Dateien, die dort identisch
+      // vorlagen, gelten als "unveraendert" und werden standardmaessig ausgeblendet.
+      let prevEntries = [];
+      const prevId = getPreviousSnapshotId(currentSnapshot);
+      if (prevId) {
         try {
-          const res2 = await fetch(`/api/${currentRepo}/ls/${latestSnapshotId}?path=${encodeURIComponent(path)}`);
+          const res2 = await fetch(`/api/${currentRepo}/ls/${prevId}?path=${encodeURIComponent(path)}`);
           if (res2.ok) {
             const data2 = await res2.json();
-            const existingNames = new Set(entries.map(e => e.name));
-            const extra = data2.entries
-              .filter(e => e.struct_type === 'node' && !existingNames.has(e.name))
-              .map(e => ({ ...e, _snapshot: latestSnapshotId, _extra: true }));
-            entries = entries.concat(extra);
+            prevEntries = data2.entries.filter(e => e.struct_type === 'node');
           }
         } catch (_) {
-          // Overlay ist optional – Fehler hier duerfen den normalen Browse-Flow nicht stoppen
+          // Diff-Basis ist optional – Fehler hier duerfen den normalen Browse-Flow nicht stoppen
         }
       }
 
+      let entries = computeChangeStatus(rawEntries, prevEntries);
+
+      if (!showAllFiles) {
+        // Verzeichnisse bleiben zur Navigation immer sichtbar, nur Dateien filtern
+        entries = entries.filter(e => e.type === 'dir' || e._status !== 'unchanged');
+      }
+
       if (entries.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty">Leer</td></tr>';
+        const msg = showAllFiles ? 'Leer' : 'Keine Änderungen gegenüber dem vorherigen Snapshot';
+        tbody.innerHTML = `<tr><td colspan="4" class="empty">${msg}</td></tr>`;
         return;
       }
 
@@ -692,21 +724,22 @@
         const onclick = isDir
           ? `navigateTo('${e.path}')`
           : '';
-        const extraBadge = e._extra
-          ? `<span class="extra-badge" title="Nicht Teil dieses Snapshots – Stand: ${e._snapshot}">neu · ${e._snapshot}</span>`
-          : '';
+        const badge = e._status === 'new'      ? `<span class="changed-badge new">neu</span>`
+                    : e._status === 'modified' ? `<span class="changed-badge modified">geändert</span>`
+                    : '';
+        const rowCls = e._status === 'unchanged' ? 'row-unchanged' : '';
 
         return `
-          <tr class="${e._extra ? 'row-extra' : ''}">
+          <tr class="${rowCls}">
             <td>
               <span class="file-icon">${icon}</span>
               <span class="${nameCls}" onclick="${onclick}">${e.name}</span>
-              ${extraBadge}
+              ${badge}
             </td>
             <td class="file-size">${size}</td>
             <td class="file-mtime">${mtime}</td>
             <td>
-              <button class="btn-dl" onclick="downloadPath('${e._snapshot}', '${e.path}', '${e.name}')">
+              <button class="btn-dl" onclick="downloadPath('${currentSnapshot}', '${e.path}', '${e.name}')">
                 ↓ Download
               </button>
             </td>
