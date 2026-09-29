@@ -25,6 +25,10 @@
 #   scripts/samba-initial-sync.sh srv-gs10-01         # nur dieser Server
 #   scripts/samba-initial-sync.sh --dry-run           # nur die rsync-Befehle anzeigen,
 #   scripts/samba-initial-sync.sh --dry-run srv-gs10-01  # nichts wird uebertragen/angelegt
+#
+# WICHTIG: Dieses Skript braucht bash (mapfile, PIPESTATUS, pipefail - gibt
+# es in Debians /bin/sh (dash) nicht). Bitte mit "./scripts/samba-initial-sync.sh"
+# oder "bash scripts/samba-initial-sync.sh" aufrufen, NICHT mit "sh scripts/...".
 
 set -uo pipefail
 

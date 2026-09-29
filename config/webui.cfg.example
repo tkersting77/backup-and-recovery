@@ -4,13 +4,13 @@
 
 # Repositories: REPO_<NAME>=<Pfad>
 # Name wird klein geschrieben in der UI angezeigt
-REPO_FIRMA=/backup/files/restic/firma
-REPO_OPNSENSE=/backup/files/restic/opnsense
+REPO_SAMBA=/backup/files/restic/samba
+REPO_FIREWALLS=/backup/files/restic/firewalls
 
 # Passwort-Datei pro Repository: REPO_<NAME>_PASSWORD_FILE=<Pfad>
 # Falls ein Repo kein eigenes Passwort hat, wird RESTIC_PASSWORD_FILE_DEFAULT verwendet
-REPO_FIRMA_PASSWORD_FILE=/etc/restic/password-firma.txt
-REPO_OPNSENSE_PASSWORD_FILE=/etc/restic/password-opnsense.txt
+REPO_SAMBA_PASSWORD_FILE=/etc/restic/password-samba.txt
+REPO_FIREWALLS_PASSWORD_FILE=/etc/restic/password-firewalls.txt
 
 # Fallback falls kein repo-spezifisches Passwort definiert ist
 RESTIC_PASSWORD_FILE_DEFAULT=/etc/restic/password.txt

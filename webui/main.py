@@ -50,8 +50,8 @@ def load_cfg(path: str) -> dict:
 
 cfg = load_cfg(CONFIG_FILE)
 
-# Repos: REPO_FIRMA=/pfad → {"firma": "/pfad"}
-# Passwörter: REPO_FIRMA_PASSWORD_FILE=/pfad → {"firma": "/pfad"}
+# Repos: REPO_SAMBA=/pfad → {"samba": "/pfad"}
+# Passwörter: REPO_SAMBA_PASSWORD_FILE=/pfad → {"samba": "/pfad"}
 # Fallback: RESTIC_PASSWORD_FILE_DEFAULT
 REPOS: dict[str, str] = {}
 REPO_PASSWORDS: dict[str, str] = {}

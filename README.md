@@ -66,11 +66,11 @@ Der Key-Pfad kommt später als `SSH_KEY_FILE` in `config/samba.cfg` (siehe Schri
 Ein Repository für die Samba-Daten, eines für die Firewall-Configs:
 
 ```bash
-mkdir -p /backup/files/restic/firma
-restic init --repo /backup/files/restic/firma
+mkdir -p /backup/files/restic/samba
+restic init --repo /backup/files/restic/samba
 
-mkdir -p /backup/files/restic/opnsense
-restic init --repo /backup/files/restic/opnsense
+mkdir -p /backup/files/restic/firewalls
+restic init --repo /backup/files/restic/firewalls
 
 mkdir -p /etc/restic
 echo "dein-passwort" > /etc/restic/password.txt
@@ -207,7 +207,7 @@ FastAPI-Anwendung zum Durchsuchen und Wiederherstellen von Restic-Snapshots im B
 ### Snapshots anzeigen
 
 ```bash
-export RESTIC_REPOSITORY=/backup/files/restic/firma
+export RESTIC_REPOSITORY=/backup/files/restic/samba
 export RESTIC_PASSWORD_FILE=/etc/restic/password.txt
 
 restic snapshots
@@ -283,7 +283,7 @@ Wird nach jedem erfolgreichen Backup automatisch angewendet (`forget --prune`), 
 3. Passwort aus sicherem Speicher holen
 4. Restore durchführen:
    ```bash
-   restic -r /backup/files/restic/firma \
+   restic -r /backup/files/restic/samba \
      --password-file /etc/restic/password.txt \
      restore latest --tag samba --target /tmp/restore
    ```

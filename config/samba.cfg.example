@@ -5,7 +5,7 @@
 
 # Restic Repository (EIN gemeinsames Repository fuer alle Samba-Server;
 # jeder Server bekommt darin eigene Snapshots ueber --host)
-RESTIC_REPO=/backup/files/restic/firma
+RESTIC_REPO=/backup/files/restic/samba
 RESTIC_PASSWORD_FILE=/etc/restic/password.txt
 RESTIC_TAG=samba
 
