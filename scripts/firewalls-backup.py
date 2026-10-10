@@ -9,6 +9,7 @@ OPNsense Config Backup Script
 """
 
 import os
+import socket
 import subprocess
 import logging
 import smtplib
@@ -53,6 +54,10 @@ LOG_FILE             = cfg.get("LOG_FILE", "/var/log/opnsense-backup.log")
 NOTIFY_MAIL_TO       = cfg["NOTIFY_MAIL_TO"]
 NOTIFY_MAIL_FROM     = cfg["NOTIFY_MAIL_FROM"]
 SMTP_HOST            = cfg.get("SMTP_HOST", "localhost")
+# Kennzeichnet, von welchem Backup-Server die Mail kommt (bei mehreren
+# Backup-Servern im Betrieb erkennt man im Betreff sofort, welcher gemeint
+# ist). Ohne explizite Konfiguration wird der tatsaechliche Hostname verwendet.
+MAIL_SERVER_NAME     = cfg.get("MAIL_SERVER_NAME", socket.gethostname())
 
 RETENTION = {
     "keep-daily":   cfg.get("KEEP_DAILY",   "7"),
@@ -92,7 +97,7 @@ def log_and_print(msg: str, level: str = "info") -> None:
 def send_mail(subject: str, body: str) -> None:
     try:
         msg = MIMEText(body)
-        msg["Subject"] = subject
+        msg["Subject"] = f"[{MAIL_SERVER_NAME}] {subject}"
         msg["From"] = NOTIFY_MAIL_FROM
         msg["To"] = NOTIFY_MAIL_TO
         with smtplib.SMTP(SMTP_HOST) as smtp:

@@ -46,6 +46,11 @@ NOTIFY_MAIL_TO=admin@firma.de
 NOTIFY_MAIL_FROM=backup@firma.de
 SMTP_HOST=localhost
 
+# Optional: erscheint als Praefix im Betreff jeder Mail, z.B. "[pmb-gs40-01] ...".
+# Bei mehreren Backup-Servern im Betrieb sieht man so sofort im Betreff, welcher
+# Server gemeint ist. Ohne diese Zeile wird automatisch der Hostname verwendet.
+MAIL_SERVER_NAME=pmb-gs40-01
+
 # Retention Policy
 # Wird nach jedem erfolgreichen Server-Backup EINZELN per
 # "restic forget --host <server> --tag samba --prune" angewendet. Da jeder

@@ -35,6 +35,11 @@ NOTIFY_MAIL_TO=admin@firma.de
 NOTIFY_MAIL_FROM=backup@firma.de
 SMTP_HOST=localhost
 
+# Optional: erscheint als Praefix im Betreff jeder Mail, z.B. "[pmb-gs40-01] ...".
+# Bei mehreren Backup-Servern im Betrieb sieht man so sofort im Betreff, welcher
+# Server gemeint ist. Ohne diese Zeile wird automatisch der Hostname verwendet.
+MAIL_SERVER_NAME=pmb-gs40-01
+
 # Retention Policy
 # Nach jedem erfolgreichen Backup per "restic forget --prune" angewendet.
 # Restic behaelt pro Zeit-Bucket jeweils den neuesten Snapshot, alles andere
