@@ -6,4 +6,4 @@ After=network-online.target
 [Service]
 Type=oneshot
 Environment=HOME=/root
-ExecStart=/usr/bin/python3 /opt/firma-backup/scripts/samba_backup.py
+ExecStart=/backup/files/backup-and-recovery/venv/bin/python3 /backup/files/backup-and-recovery/scripts/samba-backup.py
