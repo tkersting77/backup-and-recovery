@@ -1,5 +1,5 @@
 [Unit]
-Description=Taeglicher OPNsense Backup Timer
+Description=Taeglicher Firewall Backup Timer
 
 [Timer]
 OnCalendar=*-*-* 03:00:00

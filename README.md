@@ -143,7 +143,7 @@ pip install -r requirements.txt --break-system-packages
 cp systemd/*.service systemd/*.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now samba-backup.timer
-systemctl enable --now opnsense-backup.timer
+systemctl enable --now firewalls-backup.timer
 ```
 
 > ⚠️ Vor dem Aktivieren prüfen, ob `ExecStart` in den `.service`-Dateien exakt auf die

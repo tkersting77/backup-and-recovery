@@ -1,5 +1,5 @@
 [Unit]
-Description=OPNsense Config Backup (Restic)
+Description=Firewall Config Backup (Restic)
 Wants=network-online.target
 After=network-online.target
 
