@@ -105,7 +105,26 @@ def send_mail(subject: str, body: str) -> None:
         log_and_print(f"Mail konnte nicht versendet werden: {exc}", "error")
 
 
-def run_restic(args: list, capture: bool = True, cwd=None) -> subprocess.CompletedProcess:
+def run_streaming(cmd: list, cwd=None) -> subprocess.CompletedProcess:
+    """Wie subprocess.run(capture_output=True), gibt die Ausgabe aber Zeile fuer
+    Zeile live aus (print + Log) statt erst beim Prozessende. Wichtig bei
+    Laeufen, die Stunden/Tage dauern koennen - sonst sieht man bis zum Ende
+    keinen Fortschritt."""
+    proc = subprocess.Popen(
+        cmd, cwd=cwd,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, bufsize=1,
+    )
+    output_lines = []
+    for line in proc.stdout:
+        print(line, end="")
+        logger.info(line.rstrip())
+        output_lines.append(line)
+    proc.wait()
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout="".join(output_lines), stderr="")
+
+
+def run_restic(args: list, capture: bool = True, cwd=None, stream: bool = False) -> subprocess.CompletedProcess:
     cmd = [
         "restic",
         "--repo", RESTIC_REPO,
@@ -113,6 +132,8 @@ def run_restic(args: list, capture: bool = True, cwd=None) -> subprocess.Complet
     ] + args
 
     log_and_print(f"Restic Befehl: {' '.join(cmd)}" + (f" (cwd={cwd})" if cwd else ""))
+    if stream:
+        return run_streaming(cmd, cwd=cwd)
     return subprocess.run(cmd, capture_output=capture, text=True, cwd=cwd)
 
 
@@ -161,12 +182,7 @@ def rsync_pull(name: str, host: str, paths: list, ssh_key: str, ssh_port: str) -
             f"{local_target}/",
         ]
         log_and_print(f"rsync ({name}): {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        if result.stdout:
-            logger.info(result.stdout)
-        if result.stderr:
-            logger.error(result.stderr)
+        result = run_streaming(cmd)
 
         # rc 24 = "some files vanished before transfer" - bei einer lebenden
         # Freigabe ueblich, kein echter Fehler
@@ -209,12 +225,7 @@ def backup_server(name: str, dry_run: bool = False, site: str = "") -> bool:
     # direkt "/users", "/groups" etc. - kein Ordner-Umweg ueber "tmp/samba/"
     # oder den Servernamen. Server werden ausschliesslich ueber --host
     # unterschieden (Retention laeuft ja ohnehin schon pro --host).
-    result = run_restic(args, cwd=STAGING_DIR / name)
-
-    if result.stdout:
-        logger.info(result.stdout)
-    if result.stderr:
-        logger.error(result.stderr)
+    result = run_restic(args, cwd=STAGING_DIR / name, stream=True)
 
     if result.returncode != 0:
         log_and_print(f"Restic Backup fuer {name} FEHLGESCHLAGEN", "error")
