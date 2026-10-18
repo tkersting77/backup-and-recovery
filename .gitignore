@@ -11,6 +11,11 @@ tmp/samba/*
 !tmp/samba/.gitkeep
 tmp/samba-backup.lock
 
+# Moodle-Staging (rsync-Spiegel von moodledata + SQL-Dumps, temporaer) + Lockfile
+tmp/moodle/*
+!tmp/moodle/.gitkeep
+tmp/moodle-backup.lock
+
 # Konfigurationsdateien mit echten Zugangsdaten – niemals ins Repo!
 *.cfg
 *.env

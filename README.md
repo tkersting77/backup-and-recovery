@@ -1,7 +1,8 @@
 # Firma Backup – Restic + OPNsense + WebUI
 
-Backup-Lösung für den Firma-Samba-Server und eine beliebige Anzahl von OPNsense-Firewall-Instanzen
-(Firewalls werden automatisch aus der Konfigurationsdatei ermittelt, kein Code-Change nötig).
+Backup-Lösung für den Firma-Samba-Server, eine beliebige Anzahl von OPNsense-Firewall-Instanzen
+und den Moodle-Server (moodledata + tägliche SQL-Dumps)
+(Firewalls/Server werden automatisch aus der jeweiligen Konfigurationsdatei ermittelt, kein Code-Change nötig).
 Betrieben auf einem Debian-LXC-Container auf Proxmox, verbunden per OpenVPN.
 
 ---
@@ -12,7 +13,8 @@ Betrieben auf einem Debian-LXC-Container auf Proxmox, verbunden per OpenVPN.
 backup-and-recovery/
 ├── scripts/
 │   ├── samba-backup.py         Samba-Freigaben per rsync/SSH spiegeln + Restic sichern
-│   └── firewalls-backup.py     OPNsense-Configs per API + Restic
+│   ├── firewalls-backup.py     OPNsense-Configs per API + Restic
+│   └── moodle-backup.py        moodledata + SQL-Dumps per rsync/SSH spiegeln + Restic sichern
 ├── webui/
 │   ├── main.py                 FastAPI Backend (LDAP/AD-Auth + Restic-CLI-Wrapper)
 │   └── templates/
@@ -21,12 +23,14 @@ backup-and-recovery/
 ├── config/
 │   ├── samba.cfg.example       Vorlage – auf dem Server als samba.cfg ablegen
 │   ├── firewalls.cfg.example   Vorlage – auf dem Server als firewalls.cfg ablegen
+│   ├── moodle.cfg.example      Vorlage – auf dem Server als moodle.cfg ablegen
 │   └── webui.cfg.example       Vorlage – auf dem Server als webui.cfg ablegen
 ├── systemd/                    Systemd Service- und Timer-Dateien
 ├── log/                        Log-Verzeichnis (Platzhalter, .gitkeep)
 ├── repositories/                Lokale Restic-Repositories (Platzhalter, .gitkeep)
 ├── tmp/firewalls/                Staging fuer heruntergeladene OPNsense-Configs (vor dem Restic-Backup)
 ├── tmp/samba/                    rsync-Spiegel der Samba-Freigaben (vor dem Restic-Backup)
+├── tmp/moodle/                   rsync-Spiegel von moodledata + SQL-Dumps (vor dem Restic-Backup)
 ├── requirements.txt             Python-Abhängigkeiten für Backup-Skripte + WebUI
 ├── README.md
 └── .gitignore
@@ -61,9 +65,18 @@ ssh-keygen -t ed25519 -f /etc/restic/samba_id_ed25519 -N ""
 
 Der Key-Pfad kommt später als `SSH_KEY_FILE` in `config/samba.cfg` (siehe Schritt 5).
 
+Für den Moodle-Pull analog ein eigener Key:
+
+```bash
+ssh-keygen -t ed25519 -f /etc/restic/moodle_id_ed25519 -N ""
+# Public Key (/etc/restic/moodle_id_ed25519.pub) auf dem Moodle-Server für
+# den SSH-User aus SRV_moodle_HOST in ~/.ssh/authorized_keys eintragen
+# (Lesezugriff auf moodledata + das SQL-Dump-Verzeichnis genügt)
+```
+
 ### 4. Restic Repositories initialisieren
 
-Ein Repository für die Samba-Daten, eines für die Firewall-Configs:
+Ein Repository für die Samba-Daten, eines für die Firewall-Configs, eines für Moodle:
 
 ```bash
 mkdir -p /backup/files/restic/samba
@@ -72,9 +85,15 @@ restic init --repo /backup/files/restic/samba
 mkdir -p /backup/files/restic/firewalls
 restic init --repo /backup/files/restic/firewalls
 
+mkdir -p /backup/files/restic/moodle
+restic init --repo /backup/files/restic/moodle
+
 mkdir -p /etc/restic
 echo "dein-passwort" > /etc/restic/password.txt
 chmod 600 /etc/restic/password.txt
+
+echo "dein-moodle-passwort" > /etc/restic/password-moodle.txt
+chmod 600 /etc/restic/password-moodle.txt
 ```
 
 ### 5. Konfigurationsdateien anlegen
@@ -82,10 +101,12 @@ chmod 600 /etc/restic/password.txt
 ```bash
 cp config/samba.cfg.example config/samba.cfg
 cp config/firewalls.cfg.example config/firewalls.cfg
+cp config/moodle.cfg.example config/moodle.cfg
 cp config/webui.cfg.example config/webui.cfg
 # Werte anpassen:
 nano config/samba.cfg
 nano config/firewalls.cfg
+nano config/moodle.cfg
 nano config/webui.cfg
 ```
 
@@ -100,6 +121,17 @@ sonst gelten die globalen `SSH_KEY_FILE`/`SSH_PORT`-Defaults). `<NAME>` wird 1:1
 Retention. `SRV_<NAME>_PATHS` sind kommagetrennte Pfade auf dem jeweiligen Server – jeder wird
 per rsync 1:1 (inkl. gelöschter Dateien, Zeitstempel, Rechte) nach `tmp/samba/<NAME>/<basename>/`
 gespiegelt, bevor restic den Stand dieses Servers sichert.
+
+Für `moodle.cfg` gilt dasselbe `SRV_<NAME>_HOST`-Schema wie bei Samba, mit zwei Arten von Pfaden,
+die beide in **einem** gemeinsamen restic-Snapshot landen:
+- `SRV_<NAME>_PATHS` – normales 1:1-rsync-Mirroring (wie bei Samba), hier für das
+  moodledata-Verzeichnis (Datei-Uploads).
+- `SRV_<NAME>_LATEST_PATHS` – für das SQL-Dump-Verzeichnis. Der Moodle-Server legt dort täglich
+  eine neue, zeitgestempelte Dump-Datei an, ohne alte selbst zu löschen. Damit diese (oft großen)
+  Dumps nicht jeden Tag erneut und mehrfach im Repo landen, holt `moodle-backup.py` aus diesem
+  Verzeichnis bewusst **nur die jeweils neueste Datei** – ältere Dump-Generationen bleiben auf dem
+  Moodle-Server liegen (dessen eigene Sache), die Versionsgeschichte übernimmt stattdessen restics
+  eigene Snapshot-Retention (`KEEP_DAILY`/`WEEKLY`/`MONTHLY`/`YEARLY`).
 
 ### 6. Initialen Samba-Sync durchführen (empfohlen bei großen Freigaben)
 
@@ -129,6 +161,20 @@ Log landet zusätzlich unter `log/samba-initial-sync.log`. Ist der Staging-Ordne
 vollständig, muss `samba-backup.py` beim ersten regulären Lauf nur noch die seitdem geänderten
 Dateien übertragen.
 
+Analog gibt es `scripts/moodle-initial-sync.sh` für den initialen Sync von moodledata
+(ausschließlich `SRV_<NAME>_PATHS` – die SQL-Dumps aus `SRV_<NAME>_LATEST_PATHS` bestehen pro
+Lauf nur aus einer einzelnen Datei und brauchen keinen gesonderten Seed-Sync):
+
+```bash
+scripts/moodle-initial-sync.sh --dry-run
+
+tmux new -s moodle-seed
+scripts/moodle-initial-sync.sh
+# Strg+B, D zum Abhaengen; mit "tmux attach -t moodle-seed" wieder rein
+```
+
+Log landet unter `log/moodle-initial-sync.log`.
+
 ### 7. Python-Abhängigkeiten installieren
 
 ```bash
@@ -144,10 +190,16 @@ cp systemd/*.service systemd/*.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now samba-backup.timer
 systemctl enable --now firewalls-backup.timer
+systemctl enable --now moodle-backup.timer
 ```
 
+Zeitplan der drei Timer (gestaffelt, um I/O-Überlappung zu vermeiden): Samba 02:00 Uhr →
+Firewalls 03:00 Uhr → Moodle 06:00 Uhr (mit Sicherheitsabstand nach dem Ende des
+Moodle-eigenen MySQL-Dump-Jobs, der laut Betrieb bis ca. 05:00 Uhr fertig ist).
+
 > ⚠️ Vor dem Aktivieren prüfen, ob `ExecStart` in den `.service`-Dateien exakt auf die
-> tatsächlichen Skriptnamen in `scripts/` zeigt (`samba-backup.py`, `firewalls-backup.py`).
+> tatsächlichen Skriptnamen in `scripts/` zeigt (`samba-backup.py`, `firewalls-backup.py`,
+> `moodle-backup.py`).
 
 ### 9. WebUI starten (optional)
 
@@ -175,10 +227,21 @@ python3 /opt/firma-backup/scripts/samba-backup.py --dry-run
 # OPNsense-Backup
 python3 /opt/firma-backup/scripts/firewalls-backup.py
 
+# Moodle-Backup (moodledata + SQL-Dumps)
+python3 /opt/firma-backup/scripts/moodle-backup.py
+
+# Moodle-Backup Dry-Run (kein Snapshot, keine Retention, keine Mail)
+python3 /opt/firma-backup/scripts/moodle-backup.py --dry-run
+
 # Initialer Samba-Sync (nur rsync, kein restic – siehe Installation Schritt 6)
 scripts/samba-initial-sync.sh --dry-run          # nur Befehle anzeigen
 scripts/samba-initial-sync.sh                    # alle Server
 scripts/samba-initial-sync.sh srv-gs10-01         # nur ein Server
+
+# Initialer Moodle-Sync (nur moodledata, nur rsync, kein restic – siehe Installation Schritt 6)
+scripts/moodle-initial-sync.sh --dry-run         # nur Befehle anzeigen
+scripts/moodle-initial-sync.sh                   # alle Server
+scripts/moodle-initial-sync.sh moodle            # nur ein Server
 ```
 
 ---
@@ -213,6 +276,7 @@ export RESTIC_PASSWORD_FILE=/etc/restic/password.txt
 restic snapshots
 restic snapshots --tag samba
 restic snapshots --tag opnsense
+restic snapshots --tag moodle
 ```
 
 ### Dateien suchen
@@ -303,6 +367,7 @@ jeweiligen `.cfg` konfigurierbar):
 ```
 /var/log/samba-backup.log
 /var/log/opnsense-backup.log
+/var/log/moodle-backup.log
 /var/log/restic-webui.log
 ```
 
@@ -314,7 +379,8 @@ jeweiligen `.cfg` konfigurierbar):
 |---|---|---|
 | `config/samba.cfg` | `scripts/samba-backup.py` | Restic-Repo, Samba-Host/Pfade, Mail, Retention |
 | `config/firewalls.cfg` | `scripts/firewalls-backup.py` | Restic-Repo, OPNsense-API-Zugangsdaten je Firewall, Mail, Retention |
+| `config/moodle.cfg` | `scripts/moodle-backup.py` | Restic-Repo, Moodle-Host/Pfade (moodledata + SQL-Dumps), Mail, Retention |
 | `config/webui.cfg` | `webui/main.py` | Restic-Repositories für die WebUI, AD/LDAP-Auth, Session |
 
-Alle drei Dateien enthalten Zugangsdaten und liegen **nicht** im Git-Repo (siehe `.gitignore`) –
+Alle vier Dateien enthalten Zugangsdaten und liegen **nicht** im Git-Repo (siehe `.gitignore`) –
 nur die zugehörigen `*.cfg.example`-Vorlagen sind versioniert.

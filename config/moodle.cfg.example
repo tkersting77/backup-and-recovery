@@ -1,0 +1,66 @@
+# /config/moodle.cfg
+# Konfiguration fuer moodle-backup.py
+# Diese Datei bleibt auf dem Server – NICHT ins Git-Repo committen!
+# moodle.cfg.example dient als Vorlage und IST im Git-Repo.
+
+# Restic Repository (eigenes Repository fuer Moodle, getrennt von Samba/
+# Firewalls; aktuell nur ein Moodle-Server, aber das --host-Schema bleibt
+# wie bei Samba fuer eine spaetere Erweiterung um weitere Instanzen)
+RESTIC_REPO=/backup/files/restic/moodle
+RESTIC_PASSWORD_FILE=/etc/restic/password-moodle.txt
+RESTIC_TAG=moodle
+
+# Standard-SSH-Zugang, gilt fuer alle Server, sofern nicht pro Server per
+# SRV_<NAME>_SSH_KEY_FILE / SRV_<NAME>_SSH_PORT ueberschrieben
+SSH_KEY_FILE=/etc/restic/moodle_id_ed25519
+SSH_PORT=22
+
+# Moodle-Server: Name -> SSH-Host + zu sichernde Pfade
+# Format: SRV_<NAME>_HOST,
+#         SRV_<NAME>_PATHS         (kommagetrennt, volles rsync-Mirroring)
+#         SRV_<NAME>_LATEST_PATHS  (kommagetrennt, siehe unten)
+#         optional SRV_<NAME>_SSH_KEY_FILE, SRV_<NAME>_SSH_PORT, SRV_<NAME>_SITE
+# Namen werden automatisch aus den SRV_*_HOST Eintraegen ermittelt -
+# einfach weitere Bloecke hinzufuegen fuer eine weitere Moodle-Instanz.
+# <NAME> wird 1:1 als restic --host fuer die Snapshots dieses Servers
+# verwendet. Beide Pfad-Arten landen zusammen in EINEM gemeinsamen
+# restic-Snapshot pro Lauf.
+#
+# SRV_<NAME>_PATHS: normales 1:1-Mirroring per rsync (wie bei Samba) -
+# hier die moodledata (Datei-Uploads).
+#
+# SRV_<NAME>_LATEST_PATHS: der Moodle-Server legt in diesem Verzeichnis
+# TAEGLICH eine NEUE, zeitgestempelte SQL-Dump-Datei an (alte Dumps bleiben
+# dort liegen). Damit diese (oft grossen) Dumps NICHT jeden Tag erneut UND
+# mehrfach im Restic-Repo landen, wird aus diesem Verzeichnis bewusst nur
+# die jeweils neueste Datei geholt - die Versionsgeschichte alter Dumps
+# liefert bereits restic selbst ueber seine eigene Snapshot-Retention
+# (KEEP_DAILY/WEEKLY/MONTHLY/YEARLY unten).
+SRV_moodle_HOST=moodle-user@10.8.3.10
+SRV_moodle_PATHS=/var/www/moodledata
+SRV_moodle_LATEST_PATHS=/srv/moodle-dumps
+
+# Logging
+LOG_FILE=/var/log/moodle-backup.log
+
+# Mail-Benachrichtigung
+NOTIFY_MAIL_TO=admin@firma.de
+NOTIFY_MAIL_FROM=backup@firma.de
+SMTP_HOST=localhost
+
+# Optional: erscheint als Praefix im Betreff jeder Mail, z.B. "[pmb-gs40-01] ...".
+# Bei mehreren Backup-Servern im Betrieb sieht man so sofort im Betreff, welcher
+# Server gemeint ist. Ohne diese Zeile wird automatisch der Hostname verwendet.
+MAIL_SERVER_NAME=pmb-gs40-01
+
+# Retention Policy
+# Wird nach jedem erfolgreichen Server-Backup per
+# "restic forget --host moodle --tag moodle --prune" angewendet.
+#   KEEP_DAILY=7    -> von den letzten 7 Tagen je 1 Snapshot/Tag
+#   KEEP_WEEKLY=4   -> danach von den letzten 4 Wochen je 1 Snapshot/Woche
+#   KEEP_MONTHLY=12 -> danach von den letzten 12 Monaten je 1 Snapshot/Monat
+#   KEEP_YEARLY=2   -> danach von den letzten 2 Jahren je 1 Snapshot/Jahr
+KEEP_DAILY=7
+KEEP_WEEKLY=4
+KEEP_MONTHLY=12
+KEEP_YEARLY=2

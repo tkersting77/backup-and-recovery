@@ -6,11 +6,15 @@
 # Name wird klein geschrieben in der UI angezeigt
 REPO_SAMBA=/backup/files/restic/samba
 REPO_FIREWALLS=/backup/files/restic/firewalls
+# Moodle: Datei-Uploads (moodledata) + SQL-Dumps liegen im selben Snapshot,
+# siehe moodle.cfg
+REPO_MOODLE=/backup/files/restic/moodle
 
 # Passwort-Datei pro Repository: REPO_<NAME>_PASSWORD_FILE=<Pfad>
 # Falls ein Repo kein eigenes Passwort hat, wird RESTIC_PASSWORD_FILE_DEFAULT verwendet
 REPO_SAMBA_PASSWORD_FILE=/etc/restic/password-samba.txt
 REPO_FIREWALLS_PASSWORD_FILE=/etc/restic/password-firewalls.txt
+REPO_MOODLE_PASSWORD_FILE=/etc/restic/password-moodle.txt
 
 # Fallback falls kein repo-spezifisches Passwort definiert ist
 RESTIC_PASSWORD_FILE_DEFAULT=/etc/restic/password.txt
