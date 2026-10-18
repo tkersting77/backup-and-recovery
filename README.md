@@ -260,6 +260,12 @@ FastAPI-Anwendung zum Durchsuchen und Wiederherstellen von Restic-Snapshots im B
 - **Download** einzelner Dateien oder ganzer Ordner als ZIP direkt aus dem Snapshot
   (`/api/{repo}/download/{snapshot_id}`), Restore erfolgt serverseitig in ein temporäres
   Verzeichnis und wird danach wieder aufgeräumt.
+- `webui.cfg` wird nur einmal beim Start des Prozesses gelesen. Nach jeder Änderung (z.B. ein
+  neues `REPO_<NAME>` ergänzt) muss die WebUI neu gestartet werden, damit sie wirkt:
+  ```bash
+  sudo systemctl restart restic-webui
+  sudo systemctl status restic-webui
+  ```
 - Sessions werden in-memory verwaltet (Cookie `session_token`, Ablauf über
   `SESSION_EXPIRE_MINUTES`).
 

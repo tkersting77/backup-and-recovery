@@ -424,15 +424,6 @@
       </select>
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">Tag-Filter</div>
-      <select id="tagFilter" onchange="loadSnapshots()">
-        <option value="">Alle</option>
-        <option value="samba">samba</option>
-        <option value="opnsense">opnsense</option>
-      </select>
-    </div>
-
     <div class="sidebar-label-row">
       <div class="sidebar-label">Snapshots</div>
       <button id="clearSnapshotBtn" class="btn-clear" onclick="clearSnapshotSelection()" hidden>Auswahl aufheben</button>
@@ -546,7 +537,6 @@
 
   async function loadSnapshots() {
     currentRepo = document.getElementById('repoSelect').value;
-    const tag   = document.getElementById('tagFilter').value;
     const list  = document.getElementById('snapshotList');
 
     list.innerHTML = '<div class="loading">Lade…</div>';
@@ -556,7 +546,7 @@
     resetBrowser();
 
     try {
-      const url = `/api/${currentRepo}/snapshots` + (tag ? `?tag=${tag}` : '');
+      const url = `/api/${currentRepo}/snapshots`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
