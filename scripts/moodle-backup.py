@@ -220,10 +220,12 @@ def fetch_latest_file(name: str, host: str, remote_dirs: list, ssh_key: str, ssh
 
     Die Datei wird dabei auf einen festen Namen ("dump<Endung>") umgeschrieben, damit
     ihr Pfad im Snapshot ueber alle Tage stabil bleibt (der Moodle-Server haengt selbst
-    einen Zeitstempel an den Dateinamen an, z.B. "2026-10-17_080002_moodle.sql") - so
+    einen Zeitstempel an den Dateinamen an, z.B. "moodle-db-20261029-193627.sql.gz") - so
     kann ein Restore-Skript den Pfad fest verwenden statt ihn pro Snapshot per
-    "restic ls" neu zu ermitteln. rsync -a uebertraegt dabei weiterhin die mtime der
-    Originaldatei, der tatsaechliche Dump-Zeitpunkt bleibt also trotzdem ablesbar."""
+    "restic ls" neu zu ermitteln. Die komplette Endung (auch mehrteilig wie ".sql.gz")
+    wird dabei uebernommen (-> "dump.sql.gz"). rsync -a uebertraegt dabei weiterhin die
+    mtime der Originaldatei, der tatsaechliche Dump-Zeitpunkt bleibt also trotzdem
+    ablesbar."""
     ssh_argv = ["ssh", "-p", ssh_port, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new"]
     ssh_cmd  = f"ssh -p {ssh_port} -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
     if ssh_key:
